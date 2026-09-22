@@ -1,0 +1,86 @@
+# Contrôleur ingress mutualisé — valeurs Helm pour le chart ingress-nginx
+# autonome, installé dans le namespace d'infra dédié `platform-ingress`.
+#
+#   helm upgrade --install platform-ingress ingress-nginx/ingress-nginx \
+#     -n platform-ingress --create-namespace \
+#     -f k8s/platform-ingress/values-ingress-nginx.yaml
+#
+# Pourquoi ce fichier existe : le contrôleur était un sous-chart de l'umbrella
+# rental, dans le namespace applicatif `backend` — une brique d'infra transverse
+# (rental + ESN + futures apps) coincée dans le backend d'UNE app. Il rejoint
+# ici les autres briques mutualisées hors-chart (Kong, cert-manager, CNPG,
+# VictoriaMetrics). Runbook de bascule : voir README.md de ce dossier.
+#
+# ⚠ INVARIANTS À NE PAS CASSER (sinon toutes les apps tombent) :
+#   1. MÊME IngressClass `nginx` + MÊME controllerValue → aucun Ingress d'aucune
+#      app à modifier, aucun changement DNS.
+#   2. MÊME Service LoadBalancer → k3s ServiceLB rebinde :80/:443 sur l'IP du
+#      nœud (unique IP publique via DNAT). Un seul contrôleur lié à la fois.
+
+controller:
+  # Le contrôleur sert TOUTES les apps → il ne watch aucun namespace en
+  # particulier (défaut = tous). Explicite pour lever l'ambiguïté.
+  watchNamespaces: ""
+
+  # ── Invariant 1 : classe inchangée ──────────────────────────────────────────
+  ingressClassResource:
+    name: nginx                       # NE PAS renommer : tous les Ingress ciblent `nginx`
+    enabled: true
+    default: false                    # les Ingress déclarent `ingressClassName: nginx` explicitement
+    controllerValue: k8s.io/ingress-nginx
+  ingressClass: nginx
+
+  # ── Invariant 2 : même Service LoadBalancer → même IP nœud:80/443 ───────────
+  service:
+    type: LoadBalancer
+
+  replicaCount: 1
+
+  config:
+    # DNAT direct OVH : le trafic arrive en TCP nu, pas de proxy_protocol.
+    # (true rendrait l'ingress injoignable — il attendrait un en-tête PROXY.)
+    use-proxy-protocol: "false"
+
+    # ── WAF : ModSecurity + OWASP CRS, EN OBSERVATION ────────────────────────
+    # Déplacé ici depuis l'umbrella : le WAF est une propriété du contrôleur
+    # mutualisé, il le suit dans son namespace d'infra.
+    enable-modsecurity: "true"
+    enable-owasp-modsecurity-crs: "true"
+    # ⚠ AUCUN COMMENTAIRE NI APOSTROPHE dans le fragment ci-dessous : ingress-nginx
+    # l insere dans nginx.conf entoure d apostrophes, la premiere apostrophe ferme
+    # la chaine et nginx lit la suite comme des directives (`unexpected "a"`, pod
+    # jamais pret). Explications en commentaires YAML uniquement.
+    # SecRuleEngine DetectionOnly : journalise sans bloquer (cf.
+    #   platform-ingress/WAF.md) ; passer a On apres depouillement.
+    # SecAuditLogParts ABFHZ : sans E (corps de reponse) ni I/C (corps de
+    #   requete) — les inclure fuiterait les donnees clients et les mots de passe
+    #   dans les logs de monitoring.
+    modsecurity-snippet: |
+      SecRuleEngine DetectionOnly
+      SecRequestBodyAccess On
+      SecRequestBodyLimit 52428800
+      SecRequestBodyNoFilesLimit 1048576
+      SecRequestBodyLimitAction ProcessPartial
+      SecAuditEngine RelevantOnly
+      SecAuditLogParts ABFHZ
+      SecAuditLog /dev/stdout
+      SecAuditLogFormat JSON
+      SecAuditLogType Serial
+
+  # Webhook d'admission désactivé, comme sur l'ancien sous-chart : ses Jobs de
+  # hook bloquaient le sync, et surtout un ValidatingWebhookConfiguration
+  # pointant vers un service disparu bloque TOUTE création/màj d'Ingress du
+  # cluster. En le laissant désactivé, aucun webhook n'est créé — rien à nettoyer
+  # de ce côté au cutover.
+  admissionWebhooks:
+    enabled: false
+
+  # Marge pour le CRS (mesuré ~75 Mi, mais un OOM du contrôleur = coupure totale
+  # du site, fronts compris — la réserve ne coûte rien).
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

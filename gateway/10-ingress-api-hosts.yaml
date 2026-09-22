@@ -1,0 +1,78 @@
+# Ingress de classe `nginx`, dans le namespace `gateway` : amène les hôtes d'API
+# depuis le bord jusqu'à Kong.
+#
+# Pourquoi ici et pas dans le namespace de l'application : un Ingress ne peut
+# référencer qu'un Service de son propre namespace, et `kong-proxy` vit dans
+# `gateway`. C'est donc ce fichier qui grandit d'une entrée par application —
+# la seule ressource centralisée du dispositif, et elle ne contient que des
+# noms d'hôtes.
+#
+# ⚠ Aucune annotation touchant l'en-tête `Host` (pas d'`upstream-vhost`, pas de
+# réécriture) : la résolution de tenant en dépend, et une normalisation ferait
+# répondre 404 à tous les sites tenants.
+#
+# PHASE 1 — hôte temporaire, la production ne passe pas par là.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gw
+  namespace: gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api-gw.xpms.crealcs.com
+      secretName: api-gw-tls
+  rules:
+    - host: api-gw.xpms.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 2 — bascule de l'hôte de production.
+#
+# Décommenter ce second Ingress APRÈS validation de la phase 1, et retirer
+# simultanément l'Ingress `api` du chart (k8s/templates/api/ingress.yaml) :
+# deux Ingress sur le même hôte donnent un routage indéterminé.
+#
+# Retour arrière : supprimer ce bloc et réappliquer le chart, qui recrée
+# l'Ingress d'origine pointant directement sur le Service `api`.
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: api
+#   namespace: gateway
+#   annotations:
+#     cert-manager.io/cluster-issuer: letsencrypt-http01
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+#     nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+# spec:
+#   ingressClassName: nginx
+#   tls:
+#     - hosts:
+#         - api.xpms.crealcs.com
+#       secretName: api-tls-gateway
+#   rules:
+#     - host: api.xpms.crealcs.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: kong-proxy
+#                 port:
+#                   number: 80

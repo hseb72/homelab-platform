@@ -1,0 +1,14 @@
+apiVersion: v2
+name: database
+description: >-
+  Base de données relationnelle mutualisée du cluster — une instance
+  PostgreSQL partagée par les petites applications, chacune avec sa base et son
+  rôle qui n'ouvre que cette base.
+type: application
+version: 1.0.0
+appVersion: "17.5"
+keywords: [postgresql, postgres, sql, base, socle]
+# Aucune dépendance : PostgreSQL est déployé directement, sans sous-chart. À
+# cette échelle — un nœud, quelques applications — un StatefulSet qui se lit et
+# se dépanne d'un coup d'œil vaut mieux qu'un chart tiers dont on n'utilisera
+# qu'une fraction des options.

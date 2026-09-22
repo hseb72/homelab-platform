@@ -1,0 +1,12 @@
+# Namespace de l'API gateway.
+#
+# Le label `name: gateway` n'est pas décoratif : c'est lui que sélectionne la
+# NetworkPolicy `api-gateway-only` (phase 3). Kubernetes pose bien un label
+# `kubernetes.io/metadata.name` automatiquement, mais on garde un label explicite
+# pour que le sélecteur reste lisible et indépendant de cette convention.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  labels:
+    name: gateway

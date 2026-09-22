@@ -1,0 +1,90 @@
+# Base de données relationnelle mutualisée.
+#
+# Un PostgreSQL pour toutes les petites applications du cluster : chacune reçoit
+# SA base et un rôle qui n'ouvre QUE cette base. Le partage s'arrête là — aucune
+# application ne se connecte à la base d'une autre.
+#
+# Aucun secret ici. Deux Secret sont attendus dans le namespace, créés hors
+# chart (cf. README).
+
+namespace: database
+
+# Étiquette d'adhésion. Un namespace qui la porte peut joindre PostgreSQL ; les
+# autres non. C'est le mécanisme qui évite d'écrire une règle par application
+# dans le namespace de la base : chaque application déclare son besoin chez
+# elle, et personne n'a à toucher au namespace d'un autre.
+clientLabel: database-client
+
+postgres:
+  image:
+    repository: docker.io/library/postgres
+    # ⚠ OBLIGATOIRE, et volontairement vide : le chart refuse de se rendre sans
+    # cette valeur plutôt que de risquer un tag inventé, qui donnerait un
+    # ImagePullBackOff sans rapport apparent avec la cause.
+    #
+    # Relever la version à épingler :
+    #   docker run --rm postgres:latest postgres --version
+    # puis reporter ici le numéro correspondant (p. ex. 17.5).
+    tag: ""
+  imagePullPolicy: IfNotPresent
+  # Une seule instance : à cette échelle, la redondance utile est la sauvegarde
+  # hors cluster, pas un second réplica sur le même disque.
+  replicas: 1
+  port: 5432
+  storage:
+    size: 20Gi
+    storageClass: local-path
+  # Secret portant `username` et `password` du superutilisateur. Il ne sert qu'à
+  # l'administration et au provisionnement — aucune application ne l'utilise.
+  superuserSecret: postgres-superuser
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 2000m, memory: 2Gi }
+
+provision:
+  enabled: true
+  # Le provisionnement se fait avec `psql`, livré dans l'image du serveur : une
+  # seule image, un seul tag à tenir à jour.
+  # Secret portant une clé par locataire : `<nom du locataire>` → mot de passe.
+  # C'est LA source de vérité de ces identifiants ; le Job les applique à chaque
+  # synchronisation, une rotation s'y propage donc d'elle-même.
+  tenantKeysSecret: database-tenant-keys
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+# ── Locataires ───────────────────────────────────────────────────────────────
+# La source de vérité. Ajouter une application, c'est ajouter une entrée ici et
+# une clé dans le Secret : le reste est appliqué par le Job de provisionnement,
+# et relu en revue de code plutôt que tapé à la main sur un cluster.
+#
+# `name` est le rôle de connexion ; `database` la base dont il est propriétaire.
+tenants:
+  - name: findout
+    database: findout
+  # Exemples à décommenter au fur et à mesure des reprises :
+  # - name: rental
+  #   database: rental
+  # - name: pulse-rh
+  #   database: pulse_rh
+
+security:
+  podSecurityStandard: restricted
+  podSecurityContext:
+    runAsNonRoot: true
+    # 999 : l'utilisateur `postgres` de l'image officielle.
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    privileged: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true
