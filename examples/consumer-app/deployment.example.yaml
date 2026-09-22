@@ -1,0 +1,77 @@
+# Déploiement d'exemple — GABARIT montrant le câblage des trois ressources.
+#
+# L'essentiel est dans `env` : l'application ne connaît QUE des noms de service
+# internes et lit ses identifiants depuis les secrets créés par create-secrets.sh.
+# Aucune adresse en dur, aucun secret dans l'image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: mon-appli
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/exemple/mon-appli-api:VERSION
+          ports:
+            - containerPort: 3000
+          env:
+            # ── PostgreSQL ───────────────────────────────────────────────────
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: database-access, key: url }
+            # ── Redis (préfixe de clés imposé par l'ACL) ─────────────────────
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef: { name: cache-access, key: url }
+            - name: REDIS_KEY_PREFIX
+              valueFrom:
+                secretKeyRef: { name: cache-access, key: key-prefix }
+            # ── MinIO / S3 ───────────────────────────────────────────────────
+            - name: S3_ENDPOINT
+              valueFrom:
+                secretKeyRef: { name: object-store-access, key: endpoint }
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: object-store-access, key: access-key }
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: object-store-access, key: secret-key }
+            # Le seau autorisé porte le nom déclaré dans object-store/values.yaml
+            # (p. ex. « mon-appli-backups »).
+            - name: S3_BUCKET
+              value: mon-appli-backups
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: mon-appli
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000

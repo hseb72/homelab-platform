@@ -47,6 +47,15 @@ D'autres moteurs tournent aujourd'hui sur le cluster sans être encore décrits
 ici (cert-manager, la supervision) ; les rapatrier n'a d'intérêt que si on le
 fait sans interruption de service.
 
+## Déployer, consommer
+
+- **[`DEPLOY.md`](DEPLOY.md)** — installer le socle, dans l'ordre (projet Argo CD
+  partagé → tags d'image → secrets scellés → Applications).
+- **[`CONSUMING.md`](CONSUMING.md)** — le protocole de consommation : comment une
+  application obtient et câble ses ressources (seau + compte, base + rôle, cache +
+  ACL, exposition d'API). Gabarits copiables dans
+  [`examples/consumer-app/`](examples/consumer-app/).
+
 ## Principes
 
 - **Un composant par répertoire**, avec son `README.md`. Les backends applicatifs

@@ -1,0 +1,90 @@
+# NetworkPolicies de l'application consommatrice — GABARIT.
+#
+# Côté service mutualisé, la porte est déjà gardée : chaque backend n'admet en
+# entrée que les namespaces portant son étiquette `*-client`. Ces règles-ci sont
+# le pendant CÔTÉ APPLICATION, utile dès que le namespace applique un refus par
+# défaut en sortie (recommandé). Sans refus par défaut, la sortie est ouverte et
+# seules comptent les règles d'entrée des backends — mais poser le refus par
+# défaut ici est la bonne hygiène.
+#
+# Remplacer `mon-appli`. Ne garder que les blocs des services utilisés.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: mon-appli
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# DNS — sans quoi aucun nom de service ne se résout.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: mon-appli
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+---
+# Sortie vers les services mutualisés. Un bloc par service utilisé.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-platform
+  namespace: mon-appli
+spec:
+  podSelector: {}          # ou un sélecteur ne visant que les pods concernés
+  policyTypes: [Egress]
+  egress:
+    # MinIO — stockage objet.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: object-store
+      ports:
+        - { port: 9000, protocol: TCP }
+    # PostgreSQL — base de données.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: database
+      ports:
+        - { port: 5432, protocol: TCP }
+    # Redis — cache.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cache
+      ports:
+        - { port: 6379, protocol: TCP }
+---
+# Entrée depuis la gateway — À N'INCLURE QUE si l'application expose une API via
+# Kong (cf. api-ingress.yaml). Kong (namespace `gateway`) doit pouvoir joindre le
+# Service de l'API ; sans cette règle, il reçoit un « connection refused » que
+# Kong remonte en 502 sans en désigner la cause.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-from-gateway
+  namespace: mon-appli
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api      # les pods qui servent l'API
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: gateway
+      ports:
+        - { port: 3000, protocol: TCP }   # le port applicatif de l'API
