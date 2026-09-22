@@ -76,3 +76,39 @@ spec:
 #                 name: kong-proxy
 #                 port:
 #                   number: 80
+
+# ─────────────────────────────────────────────────────────────────────────────
+# findout — https://github.com/hseb72/findout
+#
+# L'application ne pose que ses routes Kong, dans son propre namespace
+# (`findout-backend`). L'hôte, lui, vit ici : c'est le socle qui possède le
+# namespace `gateway`, et une application n'écrit pas chez lui.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: findout-api
+  namespace: gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.findout.crealcs.com
+      secretName: findout-api-tls
+  rules:
+    - host: api.findout.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80
