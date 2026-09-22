@@ -1,0 +1,25 @@
+# AppProject Argo CD — socle du homelab.
+#
+# Un projet séparé de ceux des applications : ce qu'il déploie est partagé, et
+# son périmètre doit rester lisible d'un coup d'œil.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: homelab-platform
+  namespace: argocd
+spec:
+  description: Composants de socle mutualisés du cluster
+  sourceRepos:
+    - https://github.com/hseb72/homelab-platform.git
+    - https://github.com/hseb72/homelab-platform
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: object-store
+  # Le chart ne crée qu'une espèce de ressource hors namespace : le Namespace
+  # lui-même. On l'énumère plutôt que d'ouvrir en grand.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

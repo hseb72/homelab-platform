@@ -1,0 +1,90 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- /*
+Qui peut atteindre le stockage.
+
+Le mécanisme tient en une étiquette : un namespace qui porte
+`{{ .Values.clientLabel }}: "true"` est admis, les autres non. C'est ce qui rend
+ce composant réellement mutualisable — une nouvelle application déclare son
+besoin CHEZ ELLE, en étiquetant son propre namespace, et personne n'a jamais à
+écrire une règle dans le namespace d'un autre.
+
+L'alternative — une règle par application, posée ici — paraît plus explicite ;
+elle impose en pratique un aller-retour dans ce dépôt à chaque arrivée, et
+finit par diverger de la réalité.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "objectstore.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "objectstore.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-from-clients
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "objectstore.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Les namespaces qui ont déclaré leur adhésion.
+        - namespaceSelector:
+            matchLabels:
+              {{ .Values.clientLabel }}: "true"
+        # Le Job de provisionnement, qui vit ici.
+        - podSelector: {}
+      ports:
+        - port: {{ .Values.minio.ports.api }}
+          protocol: TCP
+---
+{{- /* Le Job de provisionnement ne parle qu'à MinIO. */}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: provision-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "objectstore.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: provision
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: minio
+      ports:
+        - port: {{ .Values.minio.ports.api }}
+          protocol: TCP
+{{- end }}

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: object-store
+description: >-
+  Stockage objet mutualisé du cluster — une instance MinIO partagée par les
+  petites applications, chacune avec ses seaux et son compte.
+type: application
+version: 1.0.0
+appVersion: "RELEASE.2025-04-22T22-12-26Z"
+keywords: [minio, s3, stockage, socle]
+# Aucune dépendance : MinIO est déployé directement, sans sous-chart. À cette
+# échelle — un nœud, quelques applications — un StatefulSet de trente lignes se
+# lit et se dépanne, là où un chart tiers apporte surtout des options qu'on
+# n'utilisera pas.

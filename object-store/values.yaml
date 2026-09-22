@@ -1,0 +1,92 @@
+# Stockage objet mutualisé.
+#
+# Un MinIO pour toutes les petites applications du cluster : chacune reçoit ses
+# seaux et un compte qui n'ouvre QUE ces seaux. Le partage s'arrête là — aucune
+# application ne voit les données d'une autre.
+#
+# Aucun secret ici. Deux Secret sont attendus dans le namespace, créés hors
+# chart (cf. README).
+
+namespace: object-store
+
+# Étiquette d'adhésion. Un namespace qui la porte peut joindre MinIO ; les
+# autres non. C'est le mécanisme qui évite d'écrire une règle par application
+# dans le namespace du stockage : chaque application déclare son besoin chez
+# elle, et personne n'a à toucher au namespace d'un autre.
+clientLabel: object-store-client
+
+minio:
+  image:
+    repository: docker.io/minio/minio
+    # ⚠ OBLIGATOIRE, et volontairement vide : le chart refuse de se rendre sans
+    # cette valeur plutôt que de risquer un tag inventé, qui donnerait un
+    # ImagePullBackOff sans rapport apparent avec la cause.
+    #
+    # Relever la version à épingler :
+    #   docker run --rm minio/minio:latest --version
+    # puis reporter ici le RELEASE.… correspondant.
+    tag: ""
+  imagePullPolicy: IfNotPresent
+  # Une seule instance : à cette échelle, la redondance utile est la sauvegarde
+  # hors cluster, pas un second réplica sur le même disque.
+  replicas: 1
+  ports:
+    api: 9000
+    console: 9001
+  storage:
+    size: 20Gi
+    storageClass: local-path
+  # Secret portant `rootUser` et `rootPassword`. Il ne sert qu'à
+  # l'administration et au provisionnement — aucune application ne l'utilise.
+  rootSecret: minio-root
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { cpu: 2000m, memory: 2Gi }
+
+provision:
+  enabled: true
+  image:
+    repository: docker.io/minio/mc
+    # Même règle que ci-dessus : à renseigner, pas à deviner.
+    tag: ""
+  # Secret portant une clé par locataire : `<nom du locataire>` → clé secrète.
+  # C'est LA source de vérité de ces identifiants ; le Job les applique à
+  # chaque synchronisation, une rotation s'y propage donc d'elle-même.
+  tenantKeysSecret: object-store-tenant-keys
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+# ── Locataires ───────────────────────────────────────────────────────────────
+# La source de vérité. Ajouter une application, c'est ajouter une entrée ici et
+# une clé dans le Secret : le reste est appliqué par le Job de provisionnement,
+# et relu en revue de code plutôt que tapé à la main sur un cluster.
+tenants:
+  - name: findout
+    buckets:
+      - findout-backups
+  # Exemples à décommenter au fur et à mesure des reprises :
+  # - name: rental
+  #   buckets: [rental, rental-backups]
+  # - name: pulse-rh
+  #   buckets: [pulse-rh, pulse-rh-backups]
+
+security:
+  podSecurityStandard: restricted
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    privileged: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true

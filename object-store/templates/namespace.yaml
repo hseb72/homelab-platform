@@ -1,0 +1,16 @@
+{{- /*
+Namespace du stockage mutualisé.
+
+Les étiquettes Pod Security Admission font refuser par l'API serveur tout pod
+qui sortirait du profil — y compris un Job de dépannage lancé à la hâte.
+*/}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    name: {{ .Values.namespace }}
+    pod-security.kubernetes.io/enforce: {{ .Values.security.podSecurityStandard }}
+    pod-security.kubernetes.io/audit: {{ .Values.security.podSecurityStandard }}
+    pod-security.kubernetes.io/warn: {{ .Values.security.podSecurityStandard }}
+    {{- include "objectstore.labels" . | nindent 4 }}

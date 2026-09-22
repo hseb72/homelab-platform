@@ -1,0 +1,109 @@
+{{- /*
+MinIO, instance unique.
+
+`StatefulSet` et non `Deployment` : le volume porte des données, et un
+StatefulSet garantit qu'un seul pod y est attaché à la fois. Un Deployment en
+roulement pourrait en démarrer un second sur le même volume — MinIO refuserait,
+mais le symptôme serait obscur.
+
+⚠ `readOnlyRootFilesystem` n'a PAS pu être éprouvé : l'image MinIO est
+inaccessible depuis l'environnement où ce chart a été écrit. MinIO n'écrit en
+principe que dans son répertoire de données, mais si le pod ne démarre pas,
+c'est le premier bouton à relâcher :
+    security.containerSecurityContext.readOnlyRootFilesystem: false
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: minio
+    {{- include "objectstore.labels" . | nindent 4 }}
+spec:
+  serviceName: minio
+  replicas: {{ .Values.minio.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: minio
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+        - name: minio
+          image: {{ include "objectstore.image" (dict "repository" .Values.minio.image.repository "tag" .Values.minio.image.tag) | quote }}
+          imagePullPolicy: {{ .Values.minio.imagePullPolicy }}
+          securityContext:
+            {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":{{ .Values.minio.ports.console }}"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.minio.rootSecret }}
+                  key: rootUser
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.minio.rootSecret }}
+                  key: rootPassword
+            # La console n'est pas exposée hors du cluster : on l'atteint par
+            # `kubectl port-forward`. Un stockage partagé n'a pas besoin d'une
+            # interface d'administration sur Internet.
+            - name: MINIO_BROWSER_REDIRECT_URL
+              value: http://localhost:{{ .Values.minio.ports.console }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.ports.api }}
+            - name: console
+              containerPort: {{ .Values.minio.ports.console }}
+          # `/minio/health/live` répond dès que le processus sert ; `ready`
+          # attend que le disque soit monté et lisible. La distinction évite
+          # qu'un disque lent fasse redémarrer un pod qui allait très bien.
+          startupProbe:
+            httpGet: { path: /minio/health/live, port: api }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: api }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /minio/health/live, port: api }
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.minio.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.minio.storage.size }}

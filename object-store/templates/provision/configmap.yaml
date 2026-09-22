@@ -1,0 +1,86 @@
+{{- if .Values.provision.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provision-script
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "objectstore.labels" . | nindent 4 }}
+data:
+  provision.sh: |
+    #!/bin/sh
+    # Provisionnement des locataires du stockage mutualisé.
+    #
+    # Rejoué à chaque synchronisation : il doit donc être idempotent, et le
+    # rester même si l'état du cluster a dérivé à la main.
+    set -eu
+
+    STORE="http://minio.{{ .Values.namespace }}.svc.cluster.local:{{ .Values.minio.ports.api }}"
+
+    # MinIO peut être encore en train de monter son volume : on attend plutôt
+    # que d'échouer, sinon le Job partirait en erreur à chaque premier
+    # déploiement.
+    echo "→ attente du stockage…"
+    i=0
+    until mc alias set store "$STORE" "$ROOT_USER" "$ROOT_PASSWORD" >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -gt 60 ] && { echo "✗ stockage injoignable après 5 minutes"; exit 1; }
+      sleep 5
+    done
+    echo "  stockage joignable."
+
+    # Crée (ou met à jour) un locataire : ses seaux, sa politique, son compte.
+    # $1 = nom du locataire, $2… = ses seaux.
+    provisionner() {
+      nom="$1"; shift
+      cle_fichier="/tenant-keys/$nom"
+
+      if [ ! -s "$cle_fichier" ]; then
+        echo "✗ $nom : aucune clé dans le secret {{ .Values.provision.tenantKeysSecret }}"
+        echo "  (attendu : une entrée nommée « $nom »)"
+        return 1
+      fi
+      cle="$(cat "$cle_fichier")"
+
+      # 1. Les seaux.
+      for seau in "$@"; do
+        mc mb --ignore-existing "store/$seau" >/dev/null
+        echo "  seau $seau"
+      done
+
+      # 2. La politique : ce compte n'ouvre QUE ses propres seaux. C'est le
+      #    point qui rend le partage acceptable — une application compromise ne
+      #    voit pas les données des autres.
+      ressources=""
+      for seau in "$@"; do
+        ressources="${ressources}\"arn:aws:s3:::${seau}\",\"arn:aws:s3:::${seau}/*\","
+      done
+      ressources="${ressources%,}"
+      cat > "/tmp/${nom}.json" <<JSON
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow",
+     "Action":["s3:*"],"Resource":[${ressources}]}]}
+    JSON
+      # `create` écrase une politique existante sur les versions récentes de mc.
+      # Sur une version plus ancienne il échoue : on le signale sans arrêter le
+      # Job, la politique déjà en place restant valide.
+      mc admin policy create store "$nom" "/tmp/${nom}.json" >/dev/null 2>&1 \
+        || echo "  politique inchangée (mc n'a pas pu la réécrire)"
+
+      # 3. Le compte. La clé du secret fait foi : la réappliquer à chaque
+      #    passage fait qu'une rotation se propage d'elle-même.
+      mc admin user add store "$nom" "$cle" >/dev/null 2>&1 \
+        || echo "  compte déjà présent (clé inchangée)"
+      mc admin policy attach store "$nom" --user "$nom" >/dev/null 2>&1 \
+        || true   # déjà attachée : mc le signale comme une erreur
+      echo "  compte $nom → politique $nom"
+    }
+
+    echec=0
+    {{- range .Values.tenants }}
+    echo "→ locataire {{ .name }}"
+    provisionner {{ .name }} {{ range .buckets }}{{ . }} {{ end }}|| echec=1
+    {{- end }}
+
+    [ "$echec" -eq 0 ] || { echo "✗ au moins un locataire n'a pas été provisionné"; exit 1; }
+    echo "✓ provisionnement terminé"
+{{- end }}

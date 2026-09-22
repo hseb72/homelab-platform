@@ -1,0 +1,29 @@
+# Surcouche de production du nœud k3s.
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ À RENSEIGNER AVANT LA PREMIÈRE SYNCHRONISATION — les deux tags d'image.  ║
+# ║ Le chart refuse de se rendre tant qu'ils sont vides : c'est voulu, un    ║
+# ║ tag inventé donnerait un ImagePullBackOff sans rapport apparent avec la  ║
+# ║ cause.                                                                   ║
+# ║                                                                          ║
+# ║   docker run --rm minio/minio:latest --version                           ║
+# ║   docker run --rm minio/mc:latest --version                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+minio:
+  image:
+    tag: ""        # RELEASE.…
+  storage:
+    size: 20Gi
+    storageClass: local-path
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+provision:
+  image:
+    tag: ""        # RELEASE.…
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true

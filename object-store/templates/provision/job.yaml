@@ -1,0 +1,72 @@
+{{- if .Values.provision.enabled }}
+{{- /*
+Provisionnement des locataires, en hook Helm.
+
+`post-install,post-upgrade` : MinIO doit tourner avant qu'on lui parle. Le
+script attend d'ailleurs son démarrage, parce qu'un StatefulSet qui monte son
+volume prend parfois plus de temps que le hook.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: provision-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: provision
+    {{- include "objectstore.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: provision
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: minio
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mc
+          image: {{ include "objectstore.image" (dict "repository" .Values.provision.image.repository "tag" .Values.provision.image.tag) | quote }}
+          securityContext:
+            {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+          command: ["/bin/sh", "/script/provision.sh"]
+          env:
+            - name: ROOT_USER
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.minio.rootSecret }}, key: rootUser }
+            - name: ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.minio.rootSecret }}, key: rootPassword }
+            # `mc` écrit sa configuration sous $HOME ; le système de fichiers
+            # étant en lecture seule, on la renvoie vers le volume temporaire.
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - { name: script,      mountPath: /script,      readOnly: true }
+            - { name: tenant-keys, mountPath: /tenant-keys, readOnly: true }
+            - { name: tmp,         mountPath: /tmp }
+          resources:
+            {{- toYaml .Values.provision.resources | nindent 12 }}
+      volumes:
+        - name: script
+          configMap:
+            name: provision-script
+        - name: tenant-keys
+          secret:
+            secretName: {{ .Values.provision.tenantKeysSecret }}
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
+{{- end }}
