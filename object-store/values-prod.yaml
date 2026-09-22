@@ -12,7 +12,7 @@
 
 minio:
   image:
-    tag: ""        # RELEASE.…
+    tag: "RELEASE.2024-12-18T13-15-44Z"   # aligné sur le déploiement rental
   storage:
     size: 20Gi
     storageClass: local-path
@@ -22,7 +22,11 @@ minio:
 
 provision:
   image:
-    tag: ""        # RELEASE.…
+    # ⚠ À RENSEIGNER — le client `mc` a sa PROPRE ligne de release (pas le même
+    # timestamp que le serveur). Relever un tag récent sur quay.io/minio/mc, ou :
+    #   docker run --rm quay.io/minio/mc:latest --version
+    # Un mc récent convient (client) — il n'a pas à coïncider avec le serveur.
+    tag: ""        # RELEASE.… (quay.io/minio/mc)
 
 networkPolicies:
   enabled: true
