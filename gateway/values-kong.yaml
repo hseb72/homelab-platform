@@ -1,0 +1,97 @@
+# Kong OSS — valeurs Helm pour le chart kong/kong, namespace `gateway`.
+#
+#   helm upgrade --install kong kong/kong -n gateway -f k8s/gateway/values-kong.yaml
+#
+# ⚠ Confronter ces clés à `helm show values kong/kong --version <x>` avant la
+# première installation : certaines ont changé de nom entre versions majeures du
+# chart. Ce fichier vise la série 2.4x, celle épinglée dans k8s/Chart.yaml.
+
+# Sans cela, le chart préfixe tout du nom de la release : le Service devient
+# `kong-kong-proxy`, et l'Ingress nginx qui cherche `kong-proxy` répond 503.
+# Ce nom est écrit en dur dans 10-ingress-api-hosts.yaml et dans l'API_URL
+# interne des fronts (phase 3) — on le fige ici plutôt que de le propager.
+fullnameOverride: kong
+
+image:
+  repository: kong
+  # Version épinglée : un tag mobile ferait varier le comportement de la
+  # gateway au gré des redémarrages de pod.
+  tag: "3.9"
+
+# Sans base de données. Le contrôleur d'Ingress pousse la configuration en
+# mémoire depuis les ressources Kubernetes — rien à sauvegarder, rien à opérer.
+env:
+  database: "off"
+
+ingressController:
+  enabled: true
+  # Classe dédiée : les Ingress existants restent en `nginx` et ne sont pas
+  # happés par Kong. C'est ce qui rend la mise en place progressive possible.
+  ingressClass: kong
+  # Surveille tous les namespaces : chaque application déclare ses routes chez
+  # elle. Restreindre cette liste reviendrait à recentraliser la configuration,
+  # ce que ce mode cherche précisément à éviter.
+  watchNamespaces: []
+
+proxy:
+  # Kong est DERRIÈRE ingress-nginx, qui garde 80/443 et le WAF. Aucune
+  # exposition directe : le seul chemin entrant passe par nginx.
+  type: ClusterIP
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+  tls:
+    # TLS terminé par nginx en amont. Le rechiffrer ici n'ajouterait rien sur
+    # un trafic qui ne quitte pas le nœud, et compliquerait les certificats.
+    enabled: false
+
+admin:
+  # ⚠ Distinguer l'ÉCOUTEUR du SERVICE.
+  #
+  # `enabled: false` supprime le Service : l'API d'administration n'est
+  # joignable depuis aucun autre pod, ce qui est la posture voulue.
+  #
+  # `http.enabled: true` garde en revanche l'écouteur sur la boucle locale du
+  # pod. Il est INDISPENSABLE : en mode Ingress Controller, c'est par cette API
+  # que le contrôleur pousse la configuration dans Kong. Tout désactiver laisse
+  # le contrôleur bloqué sur « Getting the kong admin api client configuration »
+  # jusqu'à ce que la sonde le tue — le pod boucle en 0/2 sans message d'erreur
+  # explicite.
+  enabled: false
+  http:
+    enabled: true
+    containerPort: 8001
+  tls:
+    enabled: false
+
+# Manager et Portal sont des composants Enterprise.
+manager:
+  enabled: false
+portal:
+  enabled: false
+portalapi:
+  enabled: false
+
+# `/status` sert aux sondes ; il n'est pas exposé hors du cluster.
+status:
+  enabled: true
+  http:
+    enabled: true
+    containerPort: 8100
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+replicaCount: 1
+
+# Métriques Prometheus exposées sur le port status, reprises par la stack
+# VictoriaMetrics (cf. k8s/monitoring/). C'est l'observabilité « par client »
+# annoncée dans docs/architecture/edge-securite-gateway.md.
+serviceMonitor:
+  enabled: false # la stack VM utilise VMServiceScrape, cf. ci-dessous

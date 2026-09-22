@@ -74,3 +74,27 @@ jobs:
             exit 1
           fi
           echo "Aucun Secret rendu."
+
+  # Moteurs d'infra installés en CLI-Helm (platform-ingress, gateway) : on ne
+  # rend pas de chart maison, mais on vérifie que les manifests bruts sont
+  # conformes au schéma Kubernetes et que les fichiers de valeurs parsent.
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conformité des manifests bruts au schéma Kubernetes
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+          # Manifests bruts = fichiers numérotés (NN-*.yaml). Les fichiers
+          # `values-*.yaml` sont des valeurs de chart amont, pas des objets k8s.
+          shopt -s nullglob
+          manifests=(gateway/[0-9]*-*.yaml)
+          echo "manifests : ${manifests[*]}"
+          ./kubeconform -strict -ignore-missing-schemas -summary "${manifests[@]}"
+
+      - name: Les fichiers de valeurs parsent
+        run: |
+          for f in platform-ingress/values-ingress-nginx.yaml gateway/values-kong.yaml; do
+            python3 -c "import yaml,sys; list(yaml.safe_load_all(open('$f'))); print('$f : OK')"
+          done
