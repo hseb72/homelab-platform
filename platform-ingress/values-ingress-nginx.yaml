@@ -51,7 +51,7 @@ controller:
     # la chaine et nginx lit la suite comme des directives (`unexpected "a"`, pod
     # jamais pret). Explications en commentaires YAML uniquement.
     # SecRuleEngine DetectionOnly : journalise sans bloquer (cf.
-    #   docs/operations/waf-modsecurity.md) ; passer a On apres depouillement.
+    #   platform-ingress/WAF.md) ; passer a On apres depouillement.
     # SecAuditLogParts ABFHZ : sans E (corps de reponse) ni I/C (corps de
     #   requete) — les inclure fuiterait les donnees clients et les mots de passe
     #   dans les logs de monitoring.

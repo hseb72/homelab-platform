@@ -38,7 +38,8 @@ kubectl -n platform-ingress rollout status deploy/platform-ingress-ingress-nginx
 
 Le WAF (ModSecurity + CRS) est **en observation** (`SecRuleEngine DetectionOnly`) :
 il journalise sans bloquer. Passer à `On` après dépouillement des journaux — même
-principe que pour les quotas de Kong, observer d'abord, contraindre ensuite.
+principe que pour les quotas de Kong, observer d'abord, contraindre ensuite. Mise
+en service, dépouillement et passage en blocage : voir [`WAF.md`](WAF.md).
 
 > ⚠ Le fragment `modsecurity-snippet` ne tolère **ni commentaire ni apostrophe** :
 > ingress-nginx l'insère dans `nginx.conf` entouré d'apostrophes ; la première
