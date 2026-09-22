@@ -1,0 +1,78 @@
+# Exposition d'une API à travers la gateway — GABARIT.
+#
+# Exposer une API, c'est DEUX ressources, à deux endroits (cf. gateway/README.md) :
+#
+#  1. L'hôte, amené jusqu'à Kong — un Ingress de classe `nginx` DANS LE NAMESPACE
+#     `gateway`. Il ne peut pas vivre ici : un Ingress ne référence qu'un Service
+#     de son propre namespace, et `kong-proxy` est dans `gateway`. On l'ajoute
+#     donc à l'ingress d'hôtes centralisé du socle. Extrait à reporter dans
+#     homelab-platform/gateway/10-ingress-api-hosts.yaml :
+#
+#       - host: api.mon-appli.exemple.com
+#         http:
+#           paths:
+#             - path: /
+#               pathType: Prefix
+#               backend:
+#                 service:
+#                   name: kong-proxy
+#                   port: { number: 80 }
+#     (et l'entrée `tls` correspondante avec son secretName ; l'annotation
+#      cert-manager de l'Ingress porte le certificat.)
+#
+#  2. Les routes — la ressource ci-dessous, de classe `kong`, DANS LE NAMESPACE
+#     DE L'APPLICATION. Kong route directement vers les pods.
+#
+# ⚠ En-tête `Host` : `preserve-host` obligatoire si la résolution applicative en
+# dépend (multi-tenant, etc.). Ne jamais réécrire le Host côté nginx.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mon-appli-api
+  namespace: mon-appli
+  annotations:
+    konghq.com/preserve-host: "true"
+    konghq.com/strip-path: "false"
+spec:
+  ingressClassName: kong
+  rules:
+    # Hôte public.
+    - host: api.mon-appli.exemple.com
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000
+    # Appels internes (rendu serveur, jobs) : viser Kong par son nom de service
+    # garde le trafic dans le cluster (ni TLS, ni WAF, ni sortie réseau) tout en
+    # passant par la gateway. Sans cet hôte, Kong répond 404 à ces requêtes.
+    - host: kong-proxy.gateway.svc.cluster.local
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000
+---
+# Rate limiting — optionnel, à N'ACTIVER qu'après observation, et JAMAIS sur les
+# appels internes (petit nombre d'IP de pods, volume élevé → le quota par IP se
+# déclenche contre soi). Pour l'appliquer : `konghq.com/plugins: mon-appli-rl`
+# sur l'Ingress, en SÉPARANT au préalable l'hôte interne dans un second Ingress
+# sans cette annotation.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mon-appli-rl
+  namespace: mon-appli
+plugin: rate-limiting
+disabled: true          # phase d'observation
+config:
+  minute: 600
+  policy: local         # compteurs en mémoire du pod ; suffisant à un réplica

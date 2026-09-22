@@ -1,0 +1,22 @@
+# Namespace d'une application consommatrice — GABARIT.
+#
+# Remplacer `mon-appli` partout. Les trois étiquettes `*-client` sont le cœur du
+# dispositif : c'est par elles que l'application déclare, CHEZ ELLE, quels
+# services mutualisés elle a le droit de joindre. Retirer une étiquette = perdre
+# l'accès au service correspondant (la NetworkPolicy du service ne l'admet plus).
+#
+# Ne garder que les étiquettes des services réellement utilisés.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mon-appli
+  labels:
+    name: mon-appli
+    # Adhésion aux services mutualisés (cf. le README de chaque composant).
+    object-store-client: "true"   # → MinIO   (namespace object-store)
+    database-client: "true"       # → Postgres (namespace database)
+    cache-client: "true"          # → Redis   (namespace cache)
+    # Pod Security : au moins `baseline`, `restricted` si l'application le
+    # supporte — les services mutualisés, eux, sont tous en `restricted`.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
