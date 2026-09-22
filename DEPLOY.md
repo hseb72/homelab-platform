@@ -49,9 +49,16 @@ docker run --rm postgres:latest postgres --version   # → reporter dans databas
 **b. Créer et sceller les secrets** (hors chart — §1 du README). Chaque service
 attend deux Secret : un compte d'administration (jamais utilisé par les
 applications) et un Secret de **clés de locataires** (la source de vérité des
-identifiants). Exemple pour la base :
+identifiants).
+
+Les secrets vivent dans le namespace du service, qui n'existe pas encore à ce
+stade (c'est l'Application qui le crée à l'étape c) : on le crée donc d'abord.
+Un `create namespace` nu suffit — le chart y réapposera ses étiquettes Pod
+Security à la synchronisation. Exemple pour la base :
 
 ```bash
+kubectl create namespace database --dry-run=client -o yaml | kubectl apply -f -
+
 kubectl -n database create secret generic postgres-superuser \
   --from-literal=username=postgres \
   --from-literal=password="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
