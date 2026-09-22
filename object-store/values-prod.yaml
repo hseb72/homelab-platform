@@ -22,11 +22,9 @@ minio:
 
 provision:
   image:
-    # ⚠ À RENSEIGNER — le client `mc` a sa PROPRE ligne de release (pas le même
-    # timestamp que le serveur). Relever un tag récent sur quay.io/minio/mc, ou :
-    #   docker run --rm quay.io/minio/mc:latest --version
-    # Un mc récent convient (client) — il n'a pas à coïncider avec le serveur.
-    tag: ""        # RELEASE.… (quay.io/minio/mc)
+    # Client `mc` (quay.io/minio/mc) — sa propre ligne de release, indépendante
+    # du serveur ; un mc récent convient pour le provisionnement.
+    tag: "RELEASE.2025-08-13T08-35-41Z"
 
 networkPolicies:
   enabled: true
