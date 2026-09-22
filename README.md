@@ -17,12 +17,23 @@ l'application de gestion immobilière. D'où ce dépôt.
 
 | Composant | Namespace | État |
 |---|---|---|
-| [`object-store/`](object-store/) — MinIO mutualisé | `object-store` | à installer |
+| [`object-store/`](object-store/) — MinIO mutualisé (stockage objet) | `object-store` | à installer |
+| [`database/`](database/) — PostgreSQL mutualisé (données) | `database` | à installer |
+| [`cache/`](cache/) — Redis mutualisé (cache) | `cache` | à installer |
 
-D'autres pourront le rejoindre à mesure qu'ils se formalisent : la passerelle
-Kong (`gateway`), cert-manager, la supervision. Ils tournent aujourd'hui sur le
-cluster sans être décrits ici ; les reprendre n'a d'intérêt que si on le fait
-sans interruption de service.
+Chacun suit le même patron : une instance partagée, et pour chaque application
+**une ressource isolée avec son compte** — un seau et sa clé pour MinIO, une
+base et son rôle pour PostgreSQL, un préfixe de clés et son compte ACL pour
+Redis. L'application déclare son besoin chez elle (étiquette de namespace) et le
+locataire est déclaré ici, en une entrée relue en revue de code ; un Job de
+provisionnement idempotent applique le reste. C'est le « portail de services »
+sous sa forme la plus simple : GitOps plutôt qu'une interface, pour l'instant.
+
+D'autres pourront rejoindre à mesure qu'ils se formalisent : la passerelle Kong
+(`gateway`) et l'ingress en frontal, cert-manager, la supervision. Ils tournent
+aujourd'hui sur le cluster sans être décrits ici ; les reprendre n'a d'intérêt
+que si on le fait sans interruption de service — un pas à part, avec son plan de
+bascule.
 
 ## Principes
 

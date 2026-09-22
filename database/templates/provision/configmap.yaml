@@ -1,0 +1,102 @@
+{{- if .Values.provision.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provision-script
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "database.labels" . | nindent 4 }}
+data:
+  provision.sh: |
+    #!/bin/sh
+    # Provisionnement des locataires de la base mutualisée.
+    #
+    # Rejoué à chaque synchronisation : il doit donc être idempotent, et le
+    # rester même si l'état du cluster a dérivé à la main.
+    set -eu
+
+    export PGHOST="postgres.{{ .Values.namespace }}.svc.cluster.local"
+    export PGPORT="{{ .Values.postgres.port }}"
+    export PGUSER="$SUPER_USER"
+    export PGPASSWORD="$SUPER_PASSWORD"
+    export PGDATABASE="postgres"
+    # Connexions d'administration en clair à l'intérieur du cluster : le
+    # cloisonnement est assuré par les NetworkPolicies, pas par TLS.
+    export PGSSLMODE="prefer"
+
+    # PostgreSQL peut être encore en train d'initialiser son volume : on attend
+    # plutôt que d'échouer, sinon le Job partirait en erreur à chaque premier
+    # déploiement.
+    echo "→ attente de la base…"
+    i=0
+    until psql -tAc 'SELECT 1' >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -gt 60 ] && { echo "✗ base injoignable après 5 minutes"; exit 1; }
+      sleep 5
+    done
+    echo "  base joignable."
+
+    # Exécute un ordre SQL dont le résultat n'importe pas.
+    sql() { psql -v ON_ERROR_STOP=1 -qtAc "$1"; }
+    # Vrai si la requête (censée renvoyer 1) ramène une ligne.
+    existe() { [ -n "$(psql -tAc "$1")" ]; }
+
+    # Crée (ou met à jour) un locataire : son rôle, son mot de passe, sa base.
+    # $1 = nom du rôle/locataire, $2 = nom de la base.
+    provisionner() {
+      nom="$1"; base="$2"
+      cle_fichier="/tenant-keys/$nom"
+
+      if [ ! -s "$cle_fichier" ]; then
+        echo "✗ $nom : aucune clé dans le secret {{ .Values.provision.tenantKeysSecret }}"
+        echo "  (attendu : une entrée nommée « $nom »)"
+        return 1
+      fi
+      cle="$(cat "$cle_fichier")"
+      # Le mot de passe est passé à psql par une variable liée (`-v`, puis
+      # `:'cle'`), jamais concaténé dans le texte SQL : psql le cite et l'échappe
+      # comme un littéral, si bien qu'une clé contenant une apostrophe ne peut ni
+      # casser l'ordre ni s'y injecter.
+
+      # 1. Le rôle. La clé du secret fait foi : la (ré)appliquer à chaque
+      #    passage fait qu'une rotation se propage d'elle-même.
+      if existe "SELECT 1 FROM pg_roles WHERE rolname = '$nom'"; then
+        psql -v ON_ERROR_STOP=1 -qtA -v cle="$cle" \
+          -c "ALTER ROLE \"$nom\" WITH LOGIN PASSWORD :'cle'" >/dev/null
+      else
+        psql -v ON_ERROR_STOP=1 -qtA -v cle="$cle" \
+          -c "CREATE ROLE \"$nom\" WITH LOGIN PASSWORD :'cle'" >/dev/null
+      fi
+      echo "  rôle $nom"
+
+      # 2. La base, dont le locataire est propriétaire. CREATE DATABASE ne
+      #    s'exécute pas dans une transaction : chaque ordre part seul.
+      if existe "SELECT 1 FROM pg_database WHERE datname = '$base'"; then
+        sql "ALTER DATABASE \"$base\" OWNER TO \"$nom\"" >/dev/null
+      else
+        sql "CREATE DATABASE \"$base\" OWNER \"$nom\"" >/dev/null
+      fi
+      echo "  base $base → propriétaire $nom"
+
+      # 3. Le cloisonnement, qui rend le partage acceptable : seul le
+      #    propriétaire peut se connecter à sa base, et personne d'autre n'y
+      #    crée d'objet. Une application compromise ne voit pas les données des
+      #    autres.
+      sql "REVOKE CONNECT ON DATABASE \"$base\" FROM PUBLIC" >/dev/null
+      sql "GRANT  CONNECT ON DATABASE \"$base\" TO \"$nom\""  >/dev/null
+      # Le schéma `public` est ouvert par défaut jusqu'à PostgreSQL 14 ; on le
+      # referme pour tous sauf le propriétaire, sans effet sur les versions où
+      # il l'est déjà.
+      psql -v ON_ERROR_STOP=1 -qtA -d "$base" \
+        -c "REVOKE CREATE ON SCHEMA public FROM PUBLIC" >/dev/null
+    }
+
+    echec=0
+    {{- range .Values.tenants }}
+    echo "→ locataire {{ .name }}"
+    provisionner {{ .name }} {{ .database }} || echec=1
+    {{- end }}
+
+    [ "$echec" -eq 0 ] || { echo "✗ au moins un locataire n'a pas été provisionné"; exit 1; }
+    echo "✓ provisionnement terminé"
+{{- end }}

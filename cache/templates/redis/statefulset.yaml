@@ -1,0 +1,97 @@
+{{- /*
+Redis, instance unique.
+
+`StatefulSet` et non `Deployment` : le volume porte le fichier d'ACL, et un
+StatefulSet garantit qu'un seul pod y écrit à la fois.
+
+Au démarrage, si le fichier d'ACL n'existe pas encore (première installation),
+l'utilisateur `default` de Redis est ouvert le temps que le Job de
+provisionnement le referme. Cette fenêtre est étroite et confinée par les
+NetworkPolicies ; c'est le Job qui pose l'administrateur puis coupe `default`.
+
+⚠ `readOnlyRootFilesystem: true` et `runAsUser: 999` (l'utilisateur `redis` de
+l'image) n'ont PAS pu être éprouvés : l'image Redis est inaccessible depuis
+l'environnement où ce chart a été écrit. Redis n'écrit en principe que dans son
+répertoire de données (le volume). Si le pod ne démarre pas, relâcher d'abord :
+    security.containerSecurityContext.readOnlyRootFilesystem: false
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: redis
+    {{- include "cache.labels" . | nindent 4 }}
+spec:
+  serviceName: redis
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        # Redémarre Redis quand la configuration change.
+        checksum/config: {{ include (print $.Template.BasePath "/redis/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: redis
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+        - name: redis
+          image: {{ include "cache.image" . | quote }}
+          imagePullPolicy: {{ .Values.redis.imagePullPolicy }}
+          securityContext:
+            {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+          # `aclfile` exige que le fichier existe : on le crée s'il manque avant
+          # de laisser la main à Redis.
+          command:
+            - /bin/sh
+            - -c
+            - 'touch -a /data/users.acl && exec redis-server /config/redis.conf'
+          ports:
+            - name: redis
+              containerPort: {{ .Values.redis.port }}
+          # Sondes TCP : elles confirment que Redis accepte les connexions, sans
+          # dépendre d'une authentification qui change avec le provisionnement.
+          startupProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.redis.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage.size }}

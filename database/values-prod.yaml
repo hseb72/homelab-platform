@@ -1,0 +1,24 @@
+# Surcouche de production du nœud k3s.
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ À RENSEIGNER AVANT LA PREMIÈRE SYNCHRONISATION — le tag de l'image.       ║
+# ║ Le chart refuse de se rendre tant qu'il est vide : c'est voulu, un tag    ║
+# ║ inventé donnerait un ImagePullBackOff sans rapport apparent avec la       ║
+# ║ cause.                                                                    ║
+# ║                                                                          ║
+# ║   docker run --rm postgres:latest postgres --version                     ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+postgres:
+  image:
+    tag: ""        # p. ex. 17.5
+  storage:
+    size: 20Gi
+    storageClass: local-path
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true

@@ -12,27 +12,37 @@ concurrency:
 jobs:
   helm:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Chaque composant déclare les tags d'image que la CI doit fournir
+          # pour rendre le chart : ils sont volontairement vides dans le dépôt.
+          - chart: object-store
+            setargs: --set minio.image.tag=CI --set provision.image.tag=CI
+          - chart: database
+            setargs: --set postgres.image.tag=CI
+          - chart: cache
+            setargs: --set redis.image.tag=CI
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
 
-      # Les tags d'image sont volontairement vides dans le dépôt : la CI en
-      # fournit de factices pour pouvoir rendre le chart.
       - name: Lint et rendu
         run: |
-          helm lint object-store/ --set minio.image.tag=CI --set provision.image.tag=CI
-          helm template object-store object-store/ -n object-store \
-            --set minio.image.tag=CI --set provision.image.tag=CI > /tmp/rendu.yaml
+          helm lint ${{ matrix.chart }}/ ${{ matrix.setargs }}
+          helm template ${{ matrix.chart }} ${{ matrix.chart }}/ -n ${{ matrix.chart }} \
+            ${{ matrix.setargs }} > /tmp/rendu.yaml
           echo "$(grep -c '^kind:' /tmp/rendu.yaml) objets rendus"
 
       - name: Le tag vide doit faire échouer le rendu
         run: |
           # Ce garde-fou est le cœur du dispositif : sans lui, un chart rendu
           # avec un tag vide produirait une image « repository: » invalide.
-          if helm template object-store object-store/ -n object-store >/dev/null 2>&1; then
-            echo "::error::Le chart se rend sans tag d'image — le garde-fou a sauté."
+          if helm template ${{ matrix.chart }} ${{ matrix.chart }}/ -n ${{ matrix.chart }} >/dev/null 2>&1; then
+            echo "::error::Le chart ${{ matrix.chart }} se rend sans tag d'image — le garde-fou a sauté."
             exit 1
           fi
           echo "Garde-fou en place."
@@ -42,20 +52,25 @@ jobs:
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
           ./kubeconform -strict -ignore-missing-schemas -summary /tmp/rendu.yaml
 
-      - name: Syntaxe du script de provisionnement
+      - name: Syntaxe des scripts de provisionnement
         run: |
           python3 - <<'PY' > /tmp/provision.sh
           import yaml
           for d in yaml.safe_load_all(open('/tmp/rendu.yaml')):
-              if d and d['kind'] == 'ConfigMap':
+              if d and d.get('kind') == 'ConfigMap' and 'provision.sh' in d.get('data', {}):
                   print(d['data']['provision.sh'])
           PY
-          sh -n /tmp/provision.sh && echo "script valide"
+          # Aucun script (composant sans provisionnement) : rien à vérifier.
+          if [ -s /tmp/provision.sh ]; then
+            sh -n /tmp/provision.sh && echo "script valide"
+          else
+            echo "aucun script de provisionnement"
+          fi
 
       - name: Aucun secret en clair
         run: |
           if grep -qE '^kind: Secret$' /tmp/rendu.yaml; then
-            echo "::error::Le chart rend un Secret — ils doivent rester hors de Git."
+            echo "::error::Le chart ${{ matrix.chart }} rend un Secret — ils doivent rester hors de Git."
             exit 1
           fi
           echo "Aucun Secret rendu."

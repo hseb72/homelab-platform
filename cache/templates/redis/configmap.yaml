@@ -1,0 +1,32 @@
+{{- /*
+Configuration Redis.
+
+Le cache est volatile par choix : ni RDB (`save ""`) ni AOF. Le volume ne porte
+que le fichier d'ACL, écrit par `ACL SAVE`, pour que les comptes des locataires
+survivent au redémarrage du pod.
+
+`protected-mode no` : l'accès n'est pas gardé par le mode protégé de Redis mais
+par les NetworkPolicies (qui namespace peut joindre le cache) et par les ACL
+(quel compte ouvre quelles clés). C'est la configuration usuelle en cluster, où
+Redis n'est jamais exposé hors du réseau interne.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cache.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    port {{ .Values.redis.port }}
+    protected-mode no
+    dir /data
+    # Comptes des locataires : écrits par le Job de provisionnement via
+    # `ACL SAVE`, rechargés à chaque démarrage.
+    aclfile /data/users.acl
+    # Cache volatile : aucune persistance des données.
+    save ""
+    appendonly no
+    maxmemory {{ .Values.redis.maxmemory }}
+    maxmemory-policy {{ .Values.redis.maxmemoryPolicy }}

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: cache
+description: >-
+  Cache mutualisé du cluster — une instance Redis partagée par les petites
+  applications, chacune avec un compte ACL borné à son propre préfixe de clés.
+type: application
+version: 1.0.0
+appVersion: "7.4"
+keywords: [redis, cache, acl, socle]
+# Aucune dépendance : Redis est déployé directement, sans sous-chart. À cette
+# échelle — un nœud, quelques applications — un StatefulSet qui se lit et se
+# dépanne d'un coup d'œil vaut mieux qu'un chart tiers dont on n'utilisera
+# qu'une fraction des options.

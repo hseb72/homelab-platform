@@ -1,0 +1,70 @@
+{{- if .Values.provision.enabled }}
+{{- /*
+Provisionnement des locataires, en hook Helm.
+
+`post-install,post-upgrade` : PostgreSQL doit tourner avant qu'on lui parle. Le
+script attend d'ailleurs son démarrage, parce qu'un StatefulSet dont c'est le
+premier initdb prend parfois plus de temps que le hook.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: provision-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: provision
+    {{- include "database.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: provision
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: postgres
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+        - name: psql
+          image: {{ include "database.image" . | quote }}
+          securityContext:
+            {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+          command: ["/bin/sh", "/script/provision.sh"]
+          env:
+            - name: SUPER_USER
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: username }
+            - name: SUPER_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: password }
+            # Le système de fichiers étant en lecture seule, on renvoie vers le
+            # volume temporaire tout ce que psql pourrait vouloir y écrire.
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - { name: script,      mountPath: /script,      readOnly: true }
+            - { name: tenant-keys, mountPath: /tenant-keys, readOnly: true }
+            - { name: tmp,         mountPath: /tmp }
+          resources:
+            {{- toYaml .Values.provision.resources | nindent 12 }}
+      volumes:
+        - name: script
+          configMap:
+            name: provision-script
+        - name: tenant-keys
+          secret:
+            secretName: {{ .Values.provision.tenantKeysSecret }}
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
+{{- end }}

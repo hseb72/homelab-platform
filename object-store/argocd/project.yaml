@@ -12,11 +12,18 @@ spec:
   sourceRepos:
     - https://github.com/hseb72/homelab-platform.git
     - https://github.com/hseb72/homelab-platform
+  # Un namespace par composant de socle. Ce projet est partagé : chaque
+  # composant y ajoute sa destination en même temps que son chart, plutôt que
+  # d'ouvrir un projet par brique.
   destinations:
     - server: https://kubernetes.default.svc
       namespace: object-store
-  # Le chart ne crée qu'une espèce de ressource hors namespace : le Namespace
-  # lui-même. On l'énumère plutôt que d'ouvrir en grand.
+    - server: https://kubernetes.default.svc
+      namespace: database
+    - server: https://kubernetes.default.svc
+      namespace: cache
+  # Les charts ne créent qu'une espèce de ressource hors namespace : le
+  # Namespace lui-même. On l'énumère plutôt que d'ouvrir en grand.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace

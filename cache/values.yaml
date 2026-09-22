@@ -1,0 +1,97 @@
+# Cache mutualisé.
+#
+# Un Redis pour toutes les petites applications du cluster : chacune reçoit un
+# compte ACL qui n'ouvre QUE ses propres clés (préfixe `<nom>:`). Le partage
+# s'arrête là — aucune application ne lit les clés d'une autre.
+#
+# Aucun secret ici. Deux Secret sont attendus dans le namespace, créés hors
+# chart (cf. README).
+
+namespace: cache
+
+# Étiquette d'adhésion. Un namespace qui la porte peut joindre Redis ; les
+# autres non. C'est le mécanisme qui évite d'écrire une règle par application
+# dans le namespace du cache : chaque application déclare son besoin chez elle,
+# et personne n'a à toucher au namespace d'un autre.
+clientLabel: cache-client
+
+redis:
+  image:
+    repository: docker.io/library/redis
+    # ⚠ OBLIGATOIRE, et volontairement vide : le chart refuse de se rendre sans
+    # cette valeur plutôt que de risquer un tag inventé, qui donnerait un
+    # ImagePullBackOff sans rapport apparent avec la cause.
+    #
+    # Relever la version à épingler :
+    #   docker run --rm redis:latest redis-server --version
+    # puis reporter ici le numéro correspondant (p. ex. 7.4.2). Redis ≥ 7 est
+    # requis pour les ACL par sélecteurs de clés utilisées ici.
+    tag: ""
+  imagePullPolicy: IfNotPresent
+  # Une seule instance : à cette échelle, un cache est reconstruit plus vite
+  # qu'un second réplica n'est utile.
+  replicas: 1
+  port: 6379
+  # Le cache est volatile par choix : pas de RDB, pas d'AOF. Le petit volume ne
+  # sert qu'à conserver le fichier d'ACL (`users.acl`) entre deux redémarrages,
+  # pour que les comptes des locataires survivent au pod.
+  storage:
+    size: 1Gi
+    storageClass: local-path
+  # Plafond mémoire et politique d'éviction. `allkeys-lru` convient à un cache :
+  # sous pression, Redis évince les clés les moins récemment utilisées plutôt
+  # que de refuser les écritures.
+  maxmemory: 256mb
+  maxmemoryPolicy: allkeys-lru
+  # Secret portant le mot de passe de l'administrateur (utilisateur `admin` de
+  # l'ACL). Il ne sert qu'au provisionnement — aucune application ne l'utilise.
+  adminSecret: cache-admin
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 1000m, memory: 320Mi }
+
+provision:
+  enabled: true
+  # Le provisionnement se fait avec `redis-cli`, livré dans l'image du serveur :
+  # une seule image, un seul tag à tenir à jour.
+  # Secret portant une clé par locataire : `<nom du locataire>` → mot de passe.
+  # C'est LA source de vérité de ces identifiants ; le Job les applique à chaque
+  # synchronisation, une rotation s'y propage donc d'elle-même.
+  tenantKeysSecret: cache-tenant-keys
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits:   { cpu: 500m, memory: 128Mi }
+
+# ── Locataires ───────────────────────────────────────────────────────────────
+# La source de vérité. Ajouter une application, c'est ajouter une entrée ici et
+# une clé dans le Secret : le reste est appliqué par le Job de provisionnement,
+# et relu en revue de code plutôt que tapé à la main sur un cluster.
+#
+# Le compte porte le nom du locataire et n'ouvre que les clés préfixées
+# `<nom>:`. C'est le point qui rend le partage acceptable.
+tenants:
+  - name: findout
+  # Exemples à décommenter au fur et à mesure des reprises :
+  # - name: rental
+  # - name: pulse-rh
+
+security:
+  podSecurityStandard: restricted
+  podSecurityContext:
+    runAsNonRoot: true
+    # 999 : l'utilisateur `redis` de l'image officielle.
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    privileged: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true

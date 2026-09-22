@@ -1,0 +1,26 @@
+# Surcouche de production du nœud k3s.
+#
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ À RENSEIGNER AVANT LA PREMIÈRE SYNCHRONISATION — le tag de l'image.       ║
+# ║ Le chart refuse de se rendre tant qu'il est vide : c'est voulu, un tag    ║
+# ║ inventé donnerait un ImagePullBackOff sans rapport apparent avec la       ║
+# ║ cause.                                                                    ║
+# ║                                                                          ║
+# ║   docker run --rm redis:latest redis-server --version                    ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+redis:
+  image:
+    tag: ""        # p. ex. 7.4.2
+  storage:
+    size: 1Gi
+    storageClass: local-path
+  maxmemory: 256mb
+  maxmemoryPolicy: allkeys-lru
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 320Mi }
+
+networkPolicies:
+  enabled: true
+  defaultDeny: true
