@@ -17,13 +17,15 @@ clientLabel: object-store-client
 
 minio:
   image:
-    repository: docker.io/minio/minio
+    # MinIO publie désormais ses images sur quay.io (Docker Hub déprécié) ; c'est
+    # aussi le registre utilisé par le déploiement rental.
+    repository: quay.io/minio/minio
     # ⚠ OBLIGATOIRE, et volontairement vide : le chart refuse de se rendre sans
     # cette valeur plutôt que de risquer un tag inventé, qui donnerait un
     # ImagePullBackOff sans rapport apparent avec la cause.
     #
     # Relever la version à épingler :
-    #   docker run --rm minio/minio:latest --version
+    #   docker run --rm quay.io/minio/minio:latest --version
     # puis reporter ici le RELEASE.… correspondant.
     tag: ""
   imagePullPolicy: IfNotPresent
@@ -46,7 +48,7 @@ minio:
 provision:
   enabled: true
   image:
-    repository: docker.io/minio/mc
+    repository: quay.io/minio/mc
     # Même règle que ci-dessus : à renseigner, pas à deviner.
     tag: ""
   # Secret portant une clé par locataire : `<nom du locataire>` → clé secrète.

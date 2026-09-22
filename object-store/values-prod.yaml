@@ -12,7 +12,7 @@
 
 minio:
   image:
-    tag: ""        # RELEASE.…
+    tag: "RELEASE.2024-12-18T13-15-44Z"   # aligné sur le déploiement rental
   storage:
     size: 20Gi
     storageClass: local-path
@@ -22,7 +22,9 @@ minio:
 
 provision:
   image:
-    tag: ""        # RELEASE.…
+    # Client `mc` (quay.io/minio/mc) — sa propre ligne de release, indépendante
+    # du serveur ; un mc récent convient pour le provisionnement.
+    tag: "RELEASE.2025-08-13T08-35-41Z"
 
 networkPolicies:
   enabled: true

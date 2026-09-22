@@ -11,7 +11,7 @@
 
 redis:
   image:
-    tag: ""        # p. ex. 7.4.2
+    tag: "7.4.3"   # aligné sur le déploiement rental (redis 7.4.3)
   storage:
     size: 1Gi
     storageClass: local-path
