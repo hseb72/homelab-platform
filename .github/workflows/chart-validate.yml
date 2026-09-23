@@ -21,7 +21,7 @@ jobs:
           - chart: object-store
             setargs: --set minio.image.tag=CI --set provision.image.tag=CI
           - chart: database
-            setargs: --set postgres.image.tag=CI
+            setargs: --set postgres.image.tag=CI --set backup.mcImage.tag=CI
           - chart: cache
             setargs: --set redis.image.tag=CI
     steps:

@@ -1,0 +1,120 @@
+{{- if .Values.backup.enabled }}
+{{- /*
+Sauvegarde quotidienne de toutes les bases locataires.
+
+Deux conteneurs, et c'est délibéré : `pg_dump` vit dans l'image PostgreSQL,
+`mc` dans celle de MinIO. Plutôt que de bricoler une image qui contiendrait les
+deux — à reconstruire à chaque montée de version de l'une ou de l'autre — le
+dump s'écrit dans un volume partagé que le second conteneur téléverse.
+
+Le format `custom` (-Fc) plutôt qu'un fichier SQL : il se restaure
+sélectivement (une table, un schéma) et se compresse d'office.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: backup
+    {{- include "database.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # Si le nœud était arrêté à l'heure dite, on ne rejoue pas indéfiniment.
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            {{- toYaml .Values.security.podSecurityContext | nindent 12 }}
+          initContainers:
+            - name: dump
+              image: {{ include "database.image" $ | quote }}
+              securityContext:
+                {{- toYaml .Values.security.containerSecurityContext | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  horodatage="$(date -u +%Y%m%dT%H%M%SZ)"
+                  {{- range .Values.tenants }}
+                  echo "→ {{ .database }}"
+                  pg_dump -h postgres -p {{ $.Values.postgres.port }} -U "$PGUSER" \
+                          -d {{ .database }} -Fc \
+                          -f "/dump/{{ .database }}-${horodatage}.dump"
+                  {{- end }}
+                  ls -lh /dump
+              env:
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: username }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: password }
+              volumeMounts:
+                - { name: dump, mountPath: /dump }
+                - { name: tmp,  mountPath: /tmp }
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          containers:
+            - name: upload
+              image: {{ include "database.mcImage" $ | quote }}
+              securityContext:
+                {{- toYaml .Values.security.containerSecurityContext | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mc alias set store "http://{{ .Values.backup.objectStore.endpoint }}" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null
+                  jour="$(date -u +%Y/%m/%d)"
+                  for f in /dump/*.dump; do
+                    mc cp "$f" "store/{{ .Values.backup.objectStore.bucket }}/${jour}/$(basename "$f")"
+                  done
+                  # Purge au-delà de la rétention. `--force` est exigé par mc
+                  # pour toute suppression récursive ; `--older-than` la borne.
+                  mc rm --recursive --force \
+                     --older-than {{ .Values.backup.retentionDays }}d \
+                     "store/{{ .Values.backup.objectStore.bucket }}/" || true
+                  echo "✓ sauvegarde téléversée"
+              env:
+                - name: ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: access-key }
+                - name: SECRET_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: secret-key }
+                # `mc` écrit sa configuration sous $HOME ; le système de
+                # fichiers étant en lecture seule, on la renvoie vers /tmp.
+                - name: MC_CONFIG_DIR
+                  value: /tmp/.mc
+                - name: HOME
+                  value: /tmp
+              volumeMounts:
+                - { name: dump, mountPath: /dump }
+                - { name: tmp,  mountPath: /tmp }
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            # Le dump transite par le disque, pas par la mémoire : une base de
+            # plusieurs gigaoctets remplirait un tmpfs et ferait échouer la
+            # sauvegarde au pire moment.
+            - name: dump
+              emptyDir:
+                sizeLimit: 10Gi
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 32Mi
+{{- end }}

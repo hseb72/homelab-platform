@@ -88,3 +88,38 @@ spec:
         - port: {{ .Values.postgres.port }}
           protocol: TCP
 {{- end }}
+{{- if .Values.backup.enabled }}
+---
+{{- /*
+La sauvegarde sort vers le stockage objet, et vers lui seul. Elle joint
+PostgreSQL par la règle d'entrée `postgres-from-clients`, qui admet déjà les
+pods de ce namespace.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "database.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backup
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - port: {{ .Values.postgres.port }}
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backup.objectStore.namespace }}
+      ports:
+        - port: {{ .Values.backup.objectStore.port }}
+          protocol: TCP
+{{- end }}

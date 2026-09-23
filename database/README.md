@@ -96,7 +96,54 @@ Il reste à créer, côté application, le secret qui porte l'hôte
 (`postgres.database.svc.cluster.local`), le nom de la base, l'utilisateur (le
 nom du locataire) et son mot de passe.
 
-## 4. Vérification
+## 4. Sauvegardes
+
+La base est sauvegardée **ici**, pour tous les locataires à la fois. Une
+application locataire n'a rien à faire : elle n'aurait de toute façon pas les
+droits pour dumper sa propre base.
+
+Un `pg_dump` par base chaque nuit à 2 h 10, format `custom` (restauration
+sélective, compression d'office), téléversé dans le seau `database-backups` du
+stockage objet mutualisé, rétention 30 jours.
+
+Le socle est donc lui-même **locataire du stockage objet**, avec son propre
+compte — déclaré dans [`object-store/values.yaml`](../object-store/). Il reste
+à déposer ses identifiants ici :
+
+```bash
+kubectl -n database create secret generic database-backup-s3 \
+  --from-literal=access-key=database \
+  --from-literal=secret-key="LA_CLE_DU_LOCATAIRE_database"
+```
+
+L'adhésion réseau, elle, est automatique : le chart pose
+`object-store-client: "true"` sur le namespace dès que `backup.enabled` est vrai.
+
+### Vérifier
+
+```bash
+kubectl -n database get cronjob backup
+kubectl -n database create job --from=cronjob/backup essai-sauvegarde
+kubectl -n database logs job/essai-sauvegarde -c dump
+kubectl -n database logs job/essai-sauvegarde
+```
+
+### Restaurer
+
+Une sauvegarde n'existe vraiment qu'une fois restaurée — à éprouver avant d'en
+avoir besoin.
+
+```bash
+# Récupérer un dump
+mc cp store/database-backups/2026/09/23/findout-20260923T021000Z.dump .
+
+# Le rejouer dans une base vierge (jamais par-dessus la base vivante)
+kubectl -n database port-forward svc/postgres 5432:5432 &
+createdb -h localhost -U postgres findout_restore
+pg_restore -h localhost -U postgres -d findout_restore --no-owner findout-*.dump
+```
+
+## 5. Vérification
 
 ```bash
 kubectl -n database get pods
@@ -117,7 +164,7 @@ PGPASSWORD="$CLE" psql -h localhost -U findout -d rental -c '\conninfo'
 #   → FATAL: permission denied for database "rental"
 ```
 
-## 5. Ce que je n'ai pas pu éprouver
+## 6. Ce que je n'ai pas pu éprouver
 
 Le chart a été écrit dans un environnement d'où l'image PostgreSQL est
 inaccessible. Deux points restent donc à confirmer au premier déploiement :

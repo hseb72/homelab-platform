@@ -13,4 +13,9 @@ metadata:
     pod-security.kubernetes.io/enforce: {{ .Values.security.podSecurityStandard }}
     pod-security.kubernetes.io/audit: {{ .Values.security.podSecurityStandard }}
     pod-security.kubernetes.io/warn: {{ .Values.security.podSecurityStandard }}
+    {{- if .Values.backup.enabled }}
+    {{- /* La sauvegarde écrit dans le stockage objet mutualisé : le socle s'y
+           déclare client comme le ferait n'importe quelle application. */}}
+    object-store-client: "true"
+    {{- end }}
     {{- include "database.labels" . | nindent 4 }}

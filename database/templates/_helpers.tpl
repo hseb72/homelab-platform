@@ -15,3 +15,10 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- define "database.service" -}}
 {{- printf "postgres.%s.svc.cluster.local" .Values.namespace -}}
 {{- end -}}
+
+{{/* Image du client `mc`, utilisée par la sauvegarde. Même exigence de tag. */}}
+{{- define "database.mcImage" -}}
+{{- $r := .Values.backup.mcImage.repository -}}
+{{- $t := required (printf "%s : renseigner le tag de l'image (cf. database/README.md §0)" $r) .Values.backup.mcImage.tag -}}
+{{- printf "%s:%s" $r $t -}}
+{{- end -}}

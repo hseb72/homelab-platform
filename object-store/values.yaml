@@ -64,9 +64,11 @@ provision:
 # une clé dans le Secret : le reste est appliqué par le Job de provisionnement,
 # et relu en revue de code plutôt que tapé à la main sur un cluster.
 tenants:
-  - name: findout
+  # Le composant `database/` du socle y dépose les sauvegardes de TOUTES les
+  # bases locataires : c'est lui le client du stockage, pas les applications.
+  - name: database
     buckets:
-      - findout-backups
+      - database-backups
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   buckets: [rental, rental-backups]

@@ -41,6 +41,35 @@ postgres:
     requests: { cpu: 100m, memory: 256Mi }
     limits:   { cpu: 2000m, memory: 2Gi }
 
+# ── Sauvegardes ──────────────────────────────────────────────────────────────
+# Une instance unique sur un volume local : la seule redondance qui vaille est
+# la sauvegarde hors du cluster. Elle est faite ICI, pour tous les locataires à
+# la fois — une application locataire n'a plus à s'en occuper, et n'aurait de
+# toute façon pas les droits pour le faire.
+backup:
+  enabled: true
+  # 2 h 10, décalé de l'heure ronde : un cron à l'heure pile fait converger
+  # toutes les tâches du cluster sur le même disque au même moment.
+  schedule: "10 2 * * *"
+  retentionDays: 30
+  # Le socle est lui-même locataire du stockage objet, avec son seau à lui.
+  objectStore:
+    namespace: object-store
+    endpoint: minio.object-store.svc.cluster.local:9000
+    port: 9000
+    bucket: database-backups
+    # Secret portant `access-key` et `secret-key` du locataire `database`
+    # déclaré dans object-store/values.yaml.
+    credentialsSecret: database-backup-s3
+  # Le téléversement demande `mc`, absent de l'image PostgreSQL. Même règle de
+  # tag que partout ailleurs : à renseigner, pas à deviner.
+  mcImage:
+    repository: quay.io/minio/mc
+    tag: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 1000m, memory: 512Mi }
+
 provision:
   enabled: true
   # Le provisionnement se fait avec `psql`, livré dans l'image du serveur : une

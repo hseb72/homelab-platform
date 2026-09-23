@@ -31,7 +31,7 @@ kubectl -n object-store create secret generic minio-root \
 # Une entrée par locataire : le nom du locataire → sa clé secrète.
 # C'est la source de vérité de ces identifiants.
 kubectl -n object-store create secret generic object-store-tenant-keys \
-  --from-literal=findout="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
+  --from-literal=database="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 ```
 
 Les sceller ensuite avec `kubeseal`, comme les autres secrets du cluster.
@@ -61,8 +61,8 @@ Deux gestes, et **un seul fichier à modifier ici**.
 
 ```yaml
 tenants:
-  - name: findout
-    buckets: [findout-backups]
+  - name: database           # le socle lui-même : sauvegardes des bases
+    buckets: [database-backups]
   - name: mon-appli          # ← la nouvelle
     buckets: [mon-appli-backups]
 ```

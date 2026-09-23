@@ -72,6 +72,13 @@ classe `kong` chez soi, **et** une entrée d'hôte à ajouter à
 `gateway/10-ingress-api-hosts.yaml`. Ajouter au namespace la règle d'entrée
 depuis `gateway` (fournie dans `networkpolicy.yaml`).
 
+## Ce dont l'application n'a PAS à s'occuper
+
+- **Les sauvegardes.** Chaque service mutualisé sauvegarde ce qu'il porte, pour
+  tous ses locataires à la fois. Une application n'a ni à archiver sa base, ni
+  les droits pour le faire. Ce qui lui revient, en revanche, c'est de **vérifier
+  qu'une restauration fonctionne** avant d'en avoir besoin.
+
 ## Ce que l'application doit respecter
 
 - **Redis** — préfixer **toutes** les clés par `<locataire>:`. L'ACL ne
