@@ -76,9 +76,23 @@ tenants:
 ```
 
 puis ajouter son mot de passe au secret `database-tenant-keys`. Le Job de
-provisionnement, rejoué à chaque synchronisation, crée le rôle, la base et les
-droits — et réapplique le mot de passe, si bien qu'une rotation se propage
-d'elle-même.
+provisionnement crée le rôle, la base et les droits — et réapplique le mot de
+passe, si bien qu'une rotation se propage d'elle-même.
+
+> ⚠ **Il se rejoue à chaque synchronisation, mais un patch de Secret n'en
+> déclenche aucune.** Le provisionnement est un hook Helm `post-upgrade`,
+> qu'Argo traduit en `PostSync` ; `database-tenant-keys` n'est pas suivi par
+> l'Application, donc le modifier ne réveille rien. Après avoir ajouté ou
+> tourné une clé, lancer `argocd app sync database`. Sans cela le mot de passe
+> n'atteint jamais PostgreSQL, et l'échec ne se manifeste que chez le
+> locataire, en « password authentication failed » — un message qui ne désigne
+> pas sa cause.
+
+> Le Job porte le numéro de révision Helm dans son nom. Sous Argo, qui rend le
+> chart avec `helm template`, ce numéro vaut toujours `1` : le Job s'appelle
+> donc invariablement `provision-1`, et c'est `hook-delete-policy:
+> before-hook-creation` qui le supprime avant de le recréer. Son nom ne change
+> jamais — ne pas en conclure qu'il n'a pas tourné.
 
 **b. Côté application**, étiqueter le namespace qui doit joindre la base :
 
