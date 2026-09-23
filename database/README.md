@@ -29,8 +29,10 @@ kubectl -n database create secret generic postgres-superuser \
   --from-literal=username=postgres \
   --from-literal=password="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
 
-# Une entrée par locataire : le nom du locataire → son mot de passe.
-# C'est la source de vérité de ces identifiants.
+# Mots de passe des locataires — UN SEUL Secret pour tous, une entrée
+# `--from-literal` par locataire (nom du locataire → son mot de passe). C'est la
+# source de vérité de ces identifiants. Un locataire de plus = une ligne de plus
+# dans CE Secret (cf. §3), jamais un second Secret du même nom.
 kubectl -n database create secret generic database-tenant-keys \
   --from-literal=findout="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 ```
@@ -75,9 +77,22 @@ tenants:
     database: mon_appli
 ```
 
-puis ajouter son mot de passe au secret `database-tenant-keys`. Le Job de
-provisionnement, rejoué à chaque synchronisation, crée le rôle, la base et les
-droits — et réapplique le mot de passe, si bien qu'une rotation se propage
+puis **ajouter son entrée au Secret** `database-tenant-keys` — le même Secret
+pour tous les locataires, une clé par locataire (la clé porte le nom du
+locataire, qui est aussi le nom du rôle PostgreSQL). Comme ce Secret est scellé,
+on régénère l'ensemble et on re-scelle, en **conservant les mots de passe des
+locataires déjà en place** (les régénérer les ferait tourner) :
+
+```bash
+kubectl -n database create secret generic database-tenant-keys \
+  --from-literal=findout="…mot de passe existant, inchangé…" \
+  --from-literal=mon-appli="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)" \
+  --dry-run=client -o yaml | kubeseal -o yaml > database-tenant-keys.sealed.yaml
+# committer le SealedSecret, puis l'appliquer.
+```
+
+Le Job de provisionnement, rejoué à chaque synchronisation, crée le rôle, la base
+et les droits — et réapplique le mot de passe, si bien qu'une rotation se propage
 d'elle-même.
 
 **b. Côté application**, étiqueter le namespace qui doit joindre la base :

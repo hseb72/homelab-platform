@@ -28,8 +28,10 @@ kubectl create namespace cache --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n cache create secret generic cache-admin \
   --from-literal=adminPassword="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
 
-# Une entrée par locataire : le nom du locataire → son mot de passe.
-# C'est la source de vérité de ces identifiants.
+# Mots de passe des locataires — UN SEUL Secret pour tous, une entrée
+# `--from-literal` par locataire (nom du locataire → son mot de passe). C'est la
+# source de vérité de ces identifiants. Un locataire de plus = une ligne de plus
+# dans CE Secret (cf. §3), jamais un second Secret du même nom.
 kubectl -n cache create secret generic cache-tenant-keys \
   --from-literal=findout="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 ```
@@ -70,10 +72,23 @@ tenants:
   - name: mon-appli          # ← la nouvelle
 ```
 
-puis ajouter son mot de passe au secret `cache-tenant-keys`. Le Job de
-provisionnement, rejoué à chaque synchronisation, (re)crée le compte ACL borné
-à `mon-appli:*` — et réapplique le mot de passe, si bien qu'une rotation se
-propage d'elle-même.
+puis **ajouter son entrée au Secret** `cache-tenant-keys` — le même Secret pour
+tous les locataires, une clé par locataire (la clé porte le nom du locataire).
+Comme ce Secret est scellé, on régénère l'ensemble et on re-scelle, en
+**conservant les mots de passe des locataires déjà en place** (les régénérer les
+ferait tourner) :
+
+```bash
+kubectl -n cache create secret generic cache-tenant-keys \
+  --from-literal=findout="…mot de passe existant, inchangé…" \
+  --from-literal=mon-appli="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)" \
+  --dry-run=client -o yaml | kubeseal -o yaml > cache-tenant-keys.sealed.yaml
+# committer le SealedSecret, puis l'appliquer.
+```
+
+Le Job de provisionnement, rejoué à chaque synchronisation, (re)crée le compte
+ACL borné à `mon-appli:*` — et réapplique le mot de passe, si bien qu'une
+rotation se propage d'elle-même.
 
 **b. Côté application**, étiqueter le namespace qui doit joindre le cache :
 
