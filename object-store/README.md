@@ -28,8 +28,10 @@ kubectl -n object-store create secret generic minio-root \
   --from-literal=rootUser=admin \
   --from-literal=rootPassword="$(openssl rand -base64 32)"
 
-# Une entrée par locataire : le nom du locataire → sa clé secrète.
-# C'est la source de vérité de ces identifiants.
+# Clés des locataires — UN SEUL Secret pour tous, une entrée `--from-literal`
+# par locataire (nom du locataire → sa clé secrète). C'est la source de vérité
+# de ces identifiants. Un locataire de plus = une ligne de plus dans CE Secret
+# (cf. §3), jamais un second Secret du même nom.
 kubectl -n object-store create secret generic object-store-tenant-keys \
   --from-literal=findout="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 ```
@@ -67,9 +69,23 @@ tenants:
     buckets: [mon-appli-backups]
 ```
 
-puis ajouter sa clé au secret `object-store-tenant-keys`. Le Job de
-provisionnement, rejoué à chaque synchronisation, crée le seau, la politique et
-le compte — et réapplique la clé, si bien qu'une rotation se propage d'elle-même.
+puis **ajouter son entrée au Secret** `object-store-tenant-keys` — le même Secret
+pour tous les locataires, une clé par locataire (la clé porte le nom du
+locataire). Comme ce Secret est scellé, on régénère l'ensemble et on re-scelle,
+en **conservant les clés des locataires déjà en place** (les régénérer ferait
+tourner leur mot de passe) :
+
+```bash
+kubectl -n object-store create secret generic object-store-tenant-keys \
+  --from-literal=findout="…clé existante, inchangée…" \
+  --from-literal=mon-appli="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)" \
+  --dry-run=client -o yaml | kubeseal -o yaml > object-store-tenant-keys.sealed.yaml
+# committer le SealedSecret, puis l'appliquer.
+```
+
+Le Job de provisionnement, rejoué à chaque synchronisation, crée le seau, la
+politique et le compte — et réapplique la clé, si bien qu'une rotation se propage
+d'elle-même.
 
 **b. Côté application**, étiqueter le namespace qui doit joindre le stockage :
 
