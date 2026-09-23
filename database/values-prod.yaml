@@ -11,7 +11,13 @@
 
 postgres:
   image:
-    tag: "17.2"    # aligné sur le déploiement rental (CNPG postgresql:17.2)
+    tag: "17.2"
+
+backup:
+  # Client `mc` du téléversement — même version que celle déjà épinglée pour le
+  # stockage objet : un seul client à suivre sur ce cluster.
+  mcImage:
+    tag: "RELEASE.2025-08-13T08-35-41Z"    # aligné sur le déploiement rental (CNPG postgresql:17.2)
   storage:
     size: 20Gi
     storageClass: local-path
