@@ -36,6 +36,23 @@ kubectl -n object-store create secret generic object-store-tenant-keys \
 
 Les sceller ensuite avec `kubeseal`, comme les autres secrets du cluster.
 
+> **Installation antérieure aux sauvegardes.** Le premier locataire déclaré ici
+> s'appelait `findout` ; il a été renommé `database` quand le socle a pris en
+> charge les sauvegardes — c'est lui, et non l'application, qui écrit dans le
+> stockage. Un cluster installé avant ce changement porte donc une clé au
+> mauvais nom, et le Job de provisionnement échoue sur
+> `✗ database : aucune clé dans le secret object-store-tenant-keys`.
+>
+> ```bash
+> ANCIENNE="$(kubectl -n object-store get secret object-store-tenant-keys \
+>   -o jsonpath='{.data.findout}' | base64 -d)"
+> kubectl -n object-store patch secret object-store-tenant-keys \
+>   -p "{\"stringData\":{\"database\":\"$ANCIENNE\"}}"
+> argocd app sync object-store
+> ```
+>
+> Reprendre la même valeur évite d'avoir à retoucher `database-backup-s3`.
+
 ## 2. Installation
 
 ```bash

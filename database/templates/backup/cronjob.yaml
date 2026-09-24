@@ -48,6 +48,26 @@ spec:
               args:
                 - |
                   set -eu
+
+                  # Attendre la base avant de la dumper, comme le fait le Job de
+                  # provisionnement. Deux raisons, et la seconde n'est pas
+                  # théorique : PostgreSQL peut encore initialiser son volume,
+                  # et surtout, sur un cluster où les NetworkPolicies sont
+                  # programmées par un agent (kube-router sur k3s), les règles
+                  # d'un pod neuf arrivent quelques instants après lui. Un
+                  # `pg_dump` tiré à la première seconde se fait refuser par la
+                  # règle par défaut — un « Connection refused » sur la
+                  # ClusterIP, qui donne toutes les apparences d'un serveur
+                  # éteint alors qu'il tourne depuis des heures.
+                  echo "→ attente de la base…"
+                  i=0
+                  until pg_isready -h postgres -p {{ $.Values.postgres.port }} -U "$PGUSER" -q; do
+                    i=$((i + 1))
+                    [ "$i" -gt 60 ] && { echo "✗ base injoignable après 5 minutes"; exit 1; }
+                    sleep 5
+                  done
+                  echo "  base joignable."
+
                   horodatage="$(date -u +%Y%m%dT%H%M%SZ)"
                   {{- range .Values.tenants }}
                   echo "→ {{ .database }}"
@@ -77,7 +97,18 @@ spec:
               args:
                 - |
                   set -eu
-                  mc alias set store "http://{{ .Values.backup.objectStore.endpoint }}" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null
+
+                  # Même précaution que pour le dump : le stockage objet est
+                  # joint à travers une NetworkPolicy, et rien ne garantit
+                  # qu'elle soit déjà en vigueur.
+                  echo "→ attente du stockage…"
+                  i=0
+                  until mc alias set store "http://{{ .Values.backup.objectStore.endpoint }}" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null 2>&1; do
+                    i=$((i + 1))
+                    [ "$i" -gt 30 ] && { echo "✗ stockage injoignable après 2 minutes 30"; exit 1; }
+                    sleep 5
+                  done
+                  echo "  stockage joignable."
                   jour="$(date -u +%Y/%m/%d)"
                   for f in /dump/*.dump; do
                     mc cp "$f" "store/{{ .Values.backup.objectStore.bucket }}/${jour}/$(basename "$f")"

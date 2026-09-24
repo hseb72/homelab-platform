@@ -142,6 +142,24 @@ kubectl -n database logs job/essai-sauvegarde -c dump
 kubectl -n database logs job/essai-sauvegarde
 ```
 
+**Attendu** dans `dump` : `base joignable.`, puis une ligne par base et le
+listing du volume. Dans le conteneur principal : `✓ sauvegarde téléversée`.
+
+> **« Connection refused » sur la ClusterIP, alors que PostgreSQL tourne.**
+> Sur k3s, les NetworkPolicies sont programmées par un agent (kube-router), et
+> les règles d'un pod neuf arrivent quelques instants après lui : une
+> connexion tirée à la première seconde se fait refuser par la règle par
+> défaut, et le refus se présente en `Connection refused` — pas en délai
+> d'attente. C'est pourquoi le dump comme le téléversement attendent leur
+> dépendance en boucle au lieu de l'attaquer d'emblée. Si le symptôme
+> réapparaît **après** la boucle (donc au-delà de cinq minutes), il ne s'agit
+> plus d'une course : vérifier les politiques.
+>
+> ```bash
+> kubectl -n database get netpol
+> kubectl -n database describe netpol backup-egress
+> ```
+
 ### Restaurer
 
 Une sauvegarde n'existe vraiment qu'une fois restaurée — à éprouver avant d'en
