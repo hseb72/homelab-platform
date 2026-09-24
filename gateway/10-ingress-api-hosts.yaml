@@ -112,3 +112,39 @@ spec:
                 name: kong-proxy
                 port:
                   number: 80
+
+# ─────────────────────────────────────────────────────────────────────────────
+# treasurehunters — https://github.com/hseb72/treasurehunters
+#
+# Routes Kong dans le namespace de l'application (`treasurehunters`,
+# deploy/manifests/api-kong-ingress.yaml). Le front relaie aussi /api vers
+# kong-proxy avec ce même hôte.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: treasurehunters-api
+  namespace: gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.treasurehunters.crealcs.com
+      secretName: treasurehunters-api-tls
+  rules:
+    - host: api.treasurehunters.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80

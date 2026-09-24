@@ -91,6 +91,9 @@ provision:
 tenants:
   - name: findout
     database: findout
+  # Treasure Hunters — https://github.com/hseb72/treasurehunters (ns `treasurehunters`)
+  - name: treasurehunters
+    database: treasurehunters
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   database: rental
