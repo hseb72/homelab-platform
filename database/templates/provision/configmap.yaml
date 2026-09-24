@@ -57,24 +57,30 @@ data:
       # `:'cle'`), jamais concaténé dans le texte SQL : psql le cite et l'échappe
       # comme un littéral, si bien qu'une clé contenant une apostrophe ne peut ni
       # casser l'ordre ni s'y injecter.
+      #
+      # ⚠ L'ordre passe par l'ENTRÉE STANDARD, pas par `-c` : psql n'interpole
+      # pas les variables dans une commande `-c` (il l'envoie telle quelle au
+      # serveur, qui répond « syntax error at or near ":" »).
+      sql_cle() { printf '%s\n' "$1" | psql -v ON_ERROR_STOP=1 -qtA -v cle="$cle"; }
 
       # 1. Le rôle. La clé du secret fait foi : la (ré)appliquer à chaque
       #    passage fait qu'une rotation se propage d'elle-même.
+      # Chaque étape s'arrête à la première erreur : inutile de tenter la base
+      # d'un rôle qui n'a pas pu être créé (les erreurs suivantes masqueraient
+      # la vraie cause).
       if existe "SELECT 1 FROM pg_roles WHERE rolname = '$nom'"; then
-        psql -v ON_ERROR_STOP=1 -qtA -v cle="$cle" \
-          -c "ALTER ROLE \"$nom\" WITH LOGIN PASSWORD :'cle'" >/dev/null
+        sql_cle "ALTER ROLE \"$nom\" WITH LOGIN PASSWORD :'cle';" >/dev/null || return 1
       else
-        psql -v ON_ERROR_STOP=1 -qtA -v cle="$cle" \
-          -c "CREATE ROLE \"$nom\" WITH LOGIN PASSWORD :'cle'" >/dev/null
+        sql_cle "CREATE ROLE \"$nom\" WITH LOGIN PASSWORD :'cle';" >/dev/null || return 1
       fi
       echo "  rôle $nom"
 
       # 2. La base, dont le locataire est propriétaire. CREATE DATABASE ne
       #    s'exécute pas dans une transaction : chaque ordre part seul.
       if existe "SELECT 1 FROM pg_database WHERE datname = '$base'"; then
-        sql "ALTER DATABASE \"$base\" OWNER TO \"$nom\"" >/dev/null
+        sql "ALTER DATABASE \"$base\" OWNER TO \"$nom\"" >/dev/null || return 1
       else
-        sql "CREATE DATABASE \"$base\" OWNER \"$nom\"" >/dev/null
+        sql "CREATE DATABASE \"$base\" OWNER \"$nom\"" >/dev/null || return 1
       fi
       echo "  base $base → propriétaire $nom"
 
