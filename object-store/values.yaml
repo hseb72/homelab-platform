@@ -69,6 +69,12 @@ tenants:
   - name: database
     buckets:
       - database-backups
+  # Treasure Hunters — https://github.com/hseb72/treasurehunters (ns `treasurehunters`) :
+  # photos de la preuve par photo, effacées par l'application 30 jours après la
+  # clôture de chaque chasse.
+  - name: treasurehunters
+    buckets:
+      - treasurehunters
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   buckets: [rental, rental-backups]
