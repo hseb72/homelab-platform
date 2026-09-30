@@ -94,6 +94,9 @@ tenants:
   # Treasure Hunters — https://github.com/hseb72/treasurehunters (ns `treasurehunters`)
   - name: treasurehunters
     database: treasurehunters
+  # MTG Wars — https://github.com/hseb72/mtgwars (ns `mtgwars`)
+  - name: mtgwars
+    database: mtgwars
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   database: rental
