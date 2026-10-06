@@ -75,6 +75,11 @@ tenants:
   - name: treasurehunters
     buckets:
       - treasurehunters
+  # Warhammer JdR, Personnages — https://github.com/hseb72/wh4chars (ns `wh4chars`) :
+  # portraits des personnages (portraits/<id>/…), supprimés avec le personnage.
+  - name: wh4chars
+    buckets:
+      - wh4chars
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   buckets: [rental, rental-backups]
