@@ -1,0 +1,63 @@
+name: Avis sur une montée de version
+
+# Renovate détecte les nouvelles versions et ouvre la PR (sans quota). Ce
+# workflow y ajoute UN avis de Claude : ce que la montée change, ce qu'elle
+# casse, et ce qu'il faut faire ici avant de fusionner — la partie que Renovate
+# ne sait pas faire.
+#
+# Budget : une exécution par PR Renovate (à l'ouverture seulement, pas à chaque
+# rebase), Sonnet, 8 tours au plus, lecture seule + un commentaire. Les notes de
+# version sont d'abord prises dans le corps de la PR (Renovate les y met) ; le
+# web n'est consulté que si elles manquent.
+#
+# Prérequis : l'app Renovate installée sur le dépôt, et le secret
+# CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`).
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  avis:
+    if: github.event.pull_request.user.login == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Dépôt ${{ github.repository }}, PR #${{ github.event.pull_request.number }},
+            ouverte par Renovate : une montée de version d'un composant du socle.
+
+            1. `gh pr view ${{ github.event.pull_request.number }}` et
+               `gh pr diff ${{ github.event.pull_request.number }}`.
+            2. Les notes de version sont dans le corps de la PR. Ne consulte le
+               web (WebFetch, une ou deux pages au plus) que si elles manquent.
+            3. Lis le README du composant touché, et ses values.yaml : ils
+               disent quelles options ce dépôt utilise.
+
+            Poste UN commentaire, en français, de moins de 25 lignes :
+            - **Verdict** : sans risque / à tester / bloquant ;
+            - les changements qui touchent CE dépôt (options renommées ou
+              supprimées que nos values utilisent, comportement par défaut
+              modifié, CVE corrigées) — pas un résumé générique ;
+            - les gestes à faire avant ou après fusion (p. ex. pour PostgreSQL
+              majeur : dump et restauration ; pour MinIO : licence, format) ;
+            - si utile, le diff de values à ajouter dans la PR.
+            N'invente rien : si les notes ne disent rien d'un point, dis-le.
+            Ne modifie aucun fichier.
+          claude_args: |
+            --model sonnet
+            --max-turns 8
+            --allowedTools Read,Grep,Glob,WebFetch,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)

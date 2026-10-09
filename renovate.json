@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Veille sur les versions épinglées du socle. Renovate détecte et ouvre la PR ; le workflow version-review y ajoute un avis (Claude, plafonné). Rien n'est fusionné automatiquement.",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "labels": ["versions"],
+  "enabledManagers": ["custom.regex", "github-actions"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Tags d'image annotés « # renovate: » au-dessus de la ligne tag:",
+      "managerFilePatterns": ["/(^|/)values-prod\\.yaml$/", "/^gateway/values-kong\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\\n\\s*tag: \"(?<currentValue>[^\"]+)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Version du chart ingress-nginx, épinglée dans la commande d'installation du runbook",
+      "managerFilePatterns": ["/^platform-ingress/README\\.md$/"],
+      "matchStrings": [
+        "helm upgrade --install platform-ingress ingress-nginx/ingress-nginx \\\\\\n\\s+-n platform-ingress --create-namespace --version (?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "helm",
+      "depNameTemplate": "ingress-nginx",
+      "registryUrlTemplate": "https://kubernetes.github.io/ingress-nginx"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Un seul client mc sur le cluster : ses deux occurrences montent ensemble.",
+      "matchDepNames": ["quay.io/minio/mc"],
+      "groupName": "client mc"
+    },
+    {
+      "description": "Une montée majeure de PostgreSQL impose dump et restauration : jamais proposée sans accord explicite.",
+      "matchDepNames": ["docker.io/library/postgres"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["versions", "majeur"]
+    },
+    {
+      "description": "Majeures de Redis, Kong et ingress-nginx : PR à part, étiquetée.",
+      "matchDepNames": ["docker.io/library/redis", "docker.io/library/kong", "ingress-nginx"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["versions", "majeur"]
+    }
+  ]
+}
