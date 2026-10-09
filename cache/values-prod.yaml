@@ -11,6 +11,7 @@
 
 redis:
   image:
+    # renovate: datasource=docker depName=docker.io/library/redis
     tag: "7.4.3"   # aligné sur le déploiement rental (redis 7.4.3)
   storage:
     size: 1Gi

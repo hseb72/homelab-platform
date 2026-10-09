@@ -53,6 +53,16 @@ kubectl -n platform-ingress logs deploy/platform-ingress-ingress-nginx-controlle
   | grep '"id":"942100"' | grep -o '"uri":"[^"]*"' | sort | uniq -c | sort -rn
 ```
 
+Le tout en une fois, et sans rien de personnel (chaînes de requête coupées, IP
+seulement comptées) — c'est ce digest, pas les logs bruts, qu'on soumet à un
+modèle si on veut un avis :
+
+```bash
+kubectl -n platform-ingress logs deploy/platform-ingress-ingress-nginx-controller --since=24h \
+  | scripts/waf-digest.py            # tableau règle → hôtes, chemins, volume
+# … | scripts/waf-digest.py --ask    # + propositions d'exclusions (Claude, 1 requête plafonnée)
+```
+
 La question à se poser pour chaque règle qui remonte : **est-ce du trafic
 légitime de la plateforme ?** Si oui, il faut l'écarter avant de passer en
 blocage — sinon le passage à `SecRuleEngine On` cassera cette fonction.

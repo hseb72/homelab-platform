@@ -1,0 +1,77 @@
+name: Nouveau locataire du socle
+description: Déclarer une application cliente (base, seaux, cache, hôte d'API). Une PR est ouverte automatiquement.
+title: "Locataire : "
+labels: ["nouveau-locataire"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Le workflow `Onboarding locataire` lit ce formulaire et ouvre la PR — **sans IA**,
+        par `scripts/add-tenant.py`. Aucune clé n'est demandée ici : elles sont
+        générées après fusion par `scripts/tenant-keys.sh`, sur le poste de l'admin.
+  - type: input
+    id: nom
+    attributes:
+      label: Nom du locataire
+      description: Compte, rôle, préfixe Redis. Minuscules, chiffres, tirets.
+      placeholder: mon-appli
+    validations:
+      required: true
+  - type: input
+    id: libelle
+    attributes:
+      label: Libellé
+      placeholder: Mon appli — ce qu'elle fait en trois mots
+    validations:
+      required: true
+  - type: input
+    id: depot
+    attributes:
+      label: Dépôt
+      placeholder: https://github.com/hseb72/mon-appli
+    validations:
+      required: true
+  - type: input
+    id: namespace
+    attributes:
+      label: Namespace
+      description: Vide = le nom du locataire.
+  - type: checkboxes
+    id: services
+    attributes:
+      label: Services
+      options:
+        - label: Base PostgreSQL
+        - label: Cache Redis
+  - type: input
+    id: base
+    attributes:
+      label: Nom de la base
+      description: Vide = le nom du locataire, tirets changés en `_`.
+  - type: input
+    id: seaux
+    attributes:
+      label: Seaux MinIO
+      description: Séparés par des virgules. Vide = pas de stockage objet.
+      placeholder: mon-appli, mon-appli-backups
+  - type: input
+    id: note_seaux
+    attributes:
+      label: Usage des seaux
+      description: Une phrase, reprise en commentaire dans object-store/values.yaml.
+  - type: input
+    id: hote
+    attributes:
+      label: Hôte d'API
+      description: Vide = pas d'API exposée.
+      placeholder: api.mon-appli.crealcs.com
+  - type: input
+    id: port
+    attributes:
+      label: Port des pods d'API
+      placeholder: "3000"
+  - type: input
+    id: taille
+    attributes:
+      label: Taille maximale du corps de requête
+      placeholder: 1m

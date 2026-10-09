@@ -12,6 +12,7 @@
 
 minio:
   image:
+    # renovate: datasource=docker depName=quay.io/minio/minio versioning=regex:^RELEASE\.(?<major>\d{4})-(?<minor>\d{2})-(?<patch>\d{2})T
     tag: "RELEASE.2024-12-18T13-15-44Z"   # aligné sur le déploiement rental
   storage:
     size: 20Gi
@@ -24,6 +25,7 @@ provision:
   image:
     # Client `mc` (quay.io/minio/mc) — sa propre ligne de release, indépendante
     # du serveur ; un mc récent convient pour le provisionnement.
+    # renovate: datasource=docker depName=quay.io/minio/mc versioning=regex:^RELEASE\.(?<major>\d{4})-(?<minor>\d{2})-(?<patch>\d{2})T
     tag: "RELEASE.2025-08-13T08-35-41Z"
 
 networkPolicies:

@@ -16,6 +16,7 @@ image:
   repository: kong
   # Version épinglée : un tag mobile ferait varier le comportement de la
   # gateway au gré des redémarrages de pod.
+  # renovate: datasource=docker depName=docker.io/library/kong
   tag: "3.9"
 
 # Sans base de données. Le contrôleur d'Ingress pousse la configuration en
