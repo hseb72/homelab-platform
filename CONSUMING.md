@@ -45,6 +45,9 @@ que sélectionnent les NetworkPolicies des services : les porter, c'est ouvrir l
 porte ; ne garder que celles des services réellement utilisés.
 
 **2. Demander les ressources (côté admin du socle).**
+Le plus court : ouvrir une issue **« Nouveau locataire »** — le guichet ouvre la
+PR qui fait tout ce qui suit côté dépôt, puis `scripts/tenant-keys.sh` dépose
+les clés après fusion (cf. [`AGENTS.md`](AGENTS.md)). À la main :
 Pour chaque service utilisé, ajouter une entrée `tenants` dans son `values.yaml`
 et une clé dans son Secret de locataires (cf. la section « Ajouter une
 application » du README du service). À la synchronisation suivante, le Job de
@@ -99,5 +102,7 @@ depuis `gateway` (fournie dans `networkpolicy.yaml`).
 - [ ] NetworkPolicies de l'application posées (refus par défaut + sorties).
 - [ ] Application déployée, connexions vérifiées.
 - [ ] (Si API) hôte ajouté au socle + Ingress `kong` + règle d'entrée `gateway`.
+- [ ] `scripts/verify-tenant.sh <locataire>` tout vert (exécute les points
+      ci-dessus côté socle, cloisonnement compris).
 - [ ] Cloisonnement éprouvé (une ressource voisine doit être refusée — cf. la
       section « Vérification » du README de chaque service).

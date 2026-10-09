@@ -56,6 +56,13 @@ fait sans interruption de service.
   ACL, exposition d'API). Gabarits copiables dans
   [`examples/consumer-app/`](examples/consumer-app/).
 
+## Automatiser
+
+- **[`AGENTS.md`](AGENTS.md)** — le guichet d'onboarding (issue → PR), les clés
+  et la vérification d'un locataire, l'épreuve de restauration hebdomadaire, la
+  veille de versions, la dérive des moteurs CLI-Helm, le dépouillement du WAF.
+  Le script d'abord ; l'IA en exception, plafonnée.
+
 ## Principes
 
 - **Un composant par répertoire**, avec son `README.md`. Les backends applicatifs

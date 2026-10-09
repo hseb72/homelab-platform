@@ -18,12 +18,13 @@ name: Onboarding locataire
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, edited, labeled]
 
 permissions: {}
 
 # `opened` et `labeled` arrivent ensemble quand le formulaire pose l'étiquette :
-# on les sérialise, et le second constate que la branche existe déjà.
+# on les sérialise, et le second constate que la branche existe déjà. `edited`
+# permet de corriger un formulaire refusé : l'issue modifiée est relue.
 concurrency:
   group: onboarding-${{ github.event.issue.number }}
   cancel-in-progress: false
@@ -32,9 +33,11 @@ jobs:
   guichet:
     # Seul le propriétaire du dépôt ouvre le guichet : le corps de l'issue est
     # du texte libre, et le job a le droit de pousser.
+    # Une issue close (la PR fusionnée la ferme) n'est plus relue.
     if: >-
       contains(github.event.issue.labels.*.name, 'nouveau-locataire') &&
-      github.event.issue.user.login == github.repository_owner
+      github.event.issue.user.login == github.repository_owner &&
+      github.event.issue.state == 'open'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -52,8 +55,25 @@ jobs:
         with:
           version: v3.16.4
 
+      # Avant tout : la demande a-t-elle déjà sa branche ? (opened + labeled
+      # arrivent ensemble ; une édition ultérieure ne doit rien refaire, ni
+      # réveiller le repli.)
+      - name: Déjà traité ?
+        id: deja
+        env:
+          CORPS: ${{ github.event.issue.body }}
+        run: |
+          nom="$(python3 -c 'import os, re
+          m = re.search(r"^### Nom du locataire\s+(\S+)", os.environ["CORPS"], re.M)
+          print(m.group(1) if m and re.fullmatch(r"[a-z0-9-]{2,32}", m.group(1)) else "")')"
+          if [ -n "$nom" ] && git ls-remote --exit-code --heads origin "tenant/$nom" >/dev/null; then
+            echo "La branche tenant/$nom existe déjà : rien à refaire."
+            echo "oui=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Déclarer le locataire (script)
         id: script
+        if: steps.deja.outputs.oui != 'true'
         env:
           CORPS: ${{ github.event.issue.body }}
         run: |
@@ -61,16 +81,6 @@ jobs:
             --kit-dir /tmp/kit --summary /tmp/resume.md 2> /tmp/script.log \
             || { cat /tmp/script.log; exit 1; }
           cat /tmp/script.log
-
-      - name: Déjà traité ?
-        id: deja
-        env:
-          NOM: ${{ steps.script.outputs.name }}
-        run: |
-          if git ls-remote --exit-code --heads origin "tenant/$NOM" >/dev/null; then
-            echo "La branche tenant/$NOM existe déjà : rien à refaire."
-            echo "oui=true" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Valider le rendu
         if: steps.deja.outputs.oui != 'true'
