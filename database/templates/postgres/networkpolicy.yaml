@@ -122,4 +122,39 @@ spec:
       ports:
         - port: {{ .Values.backup.objectStore.port }}
           protocol: TCP
+{{- if .Values.restoreCheck.enabled }}
+---
+{{- /*
+L'épreuve de restauration lit le seau des sauvegardes et compare avec la
+production : mêmes sorties que la sauvegarde, rien de plus. Son instance
+jetable n'écoute sur aucun port.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restore-check-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "database.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: restore-check
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - port: {{ .Values.postgres.port }}
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backup.objectStore.namespace }}
+      ports:
+        - port: {{ .Values.backup.objectStore.port }}
+          protocol: TCP
+{{- end }}
 {{- end }}

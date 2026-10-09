@@ -70,6 +70,25 @@ jobs:
             echo "aucun script de provisionnement"
           fi
 
+      - name: Syntaxe des scripts des CronJob
+        run: |
+          # Sauvegarde et épreuve de restauration : des scripts dans des args,
+          # qu'aucun autre contrôle ne lit.
+          python3 - <<'PY'
+          import subprocess, sys, yaml
+          ko = 0
+          for d in yaml.safe_load_all(open('/tmp/rendu.yaml')):
+              if not d or d.get('kind') != 'CronJob':
+                  continue
+              spec = d['spec']['jobTemplate']['spec']['template']['spec']
+              for c in spec.get('initContainers', []) + spec['containers']:
+                  shell = 'bash' if c['command'][0].endswith('bash') else 'sh'
+                  r = subprocess.run([shell, '-n'], input=c['args'][0], text=True)
+                  print(f"{d['metadata']['name']}/{c['name']} ({shell}) :", 'OK' if r.returncode == 0 else 'ÉCHEC')
+                  ko |= r.returncode
+          sys.exit(ko)
+          PY
+
       - name: Aucun secret en clair
         run: |
           if grep -qE '^kind: Secret$' /tmp/rendu.yaml; then

@@ -70,6 +70,23 @@ backup:
     requests: { cpu: 50m, memory: 128Mi }
     limits:   { cpu: 1000m, memory: 512Mi }
 
+# ── Épreuve de restauration ──────────────────────────────────────────────────
+# Chaque semaine, le dernier dump de chaque base est rejoué dans un PostgreSQL
+# jetable (dans le pod, rien n'est écrit en production) puis comparé à la
+# production. Le Job échoue si un dump manque, est trop vieux, ne se restaure
+# pas, ou se restaure vide : c'est ce qui doit déclencher l'alerte (README §4).
+restoreCheck:
+  enabled: true
+  # Dimanche 4 h 40 : après la sauvegarde de 2 h 10, loin de l'heure ronde.
+  schedule: "40 4 * * 0"
+  # Au-delà, la sauvegarde nocturne est considérée en panne.
+  maxAgeHours: 36
+  dumpSize: 10Gi
+  scratchSize: 20Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
 provision:
   enabled: true
   # Le provisionnement se fait avec `psql`, livré dans l'image du serveur : une

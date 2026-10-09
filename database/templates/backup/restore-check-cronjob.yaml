@@ -1,0 +1,223 @@
+{{- if and .Values.backup.enabled .Values.restoreCheck.enabled }}
+{{- /*
+Épreuve de restauration hebdomadaire — « une sauvegarde n'existe vraiment
+qu'une fois restaurée ».
+
+Pour chaque base locataire : prendre le DERNIER dump du seau, le rejouer dans
+un PostgreSQL jetable lancé dans le pod même (rien n'est écrit dans
+l'instance de production), puis comparer avec la production.
+
+Échoue — et c'est l'alerte — si :
+  • aucun dump n'existe pour une base ;
+  • le dernier dump a plus de `restoreCheck.maxAgeHours` heures (la
+    sauvegarde nocturne ne passe plus) ;
+  • pg_restore rencontre une erreur ;
+  • la base restaurée est vide alors que la production ne l'est pas.
+Un écart du nombre de tables est seulement signalé : une migration a pu passer
+depuis le dump.
+
+Aucune IA ici : le verdict est mécanique. Les alertes à poser côté supervision
+sont dans database/README.md §4.
+
+Trois étapes, pour la même raison que la sauvegarde (une image par outil) :
+  1. `liste` (mc)        — repère le dernier dump de chaque base ;
+  2. `telechargement` (mc) — le rapatrie dans un volume du pod ;
+  3. `epreuve` (postgres) — instance jetable, pg_restore, comparaison.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restore-check
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: restore-check
+    {{- include "database.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.restoreCheck.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: restore-check
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            {{- toYaml .Values.security.podSecurityContext | nindent 12 }}
+          initContainers:
+            - name: liste
+              image: {{ include "database.mcImage" $ | quote }}
+              securityContext:
+                {{- toYaml .Values.security.containerSecurityContext | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  echo "→ attente du stockage…"
+                  i=0
+                  until mc alias set store "http://{{ .Values.backup.objectStore.endpoint }}" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null 2>&1; do
+                    i=$((i + 1))
+                    [ "$i" -gt 30 ] && { echo "✗ stockage injoignable après 2 minutes 30"; exit 1; }
+                    sleep 5
+                  done
+                  # Les noms de base n'ont pas de tiret : « <base>-2… » ne peut
+                  # désigner que les dumps de cette base-là.
+                  : > /restore/choix
+                  {{- range .Values.tenants }}
+                  dernier="$(mc find "store/{{ $.Values.backup.objectStore.bucket }}" --name "{{ .database }}-2*.dump" | sort | tail -n 1)"
+                  echo "{{ .database }} ${dernier:-AUCUN}" >> /restore/choix
+                  {{- end }}
+                  cat /restore/choix
+              env:
+                - name: ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: access-key }
+                - name: SECRET_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: secret-key }
+                - name: MC_CONFIG_DIR
+                  value: /tmp/.mc
+                - name: HOME
+                  value: /tmp
+              volumeMounts:
+                - { name: restore, mountPath: /restore }
+                - { name: tmp,     mountPath: /tmp }
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+            - name: telechargement
+              image: {{ include "database.mcImage" $ | quote }}
+              securityContext:
+                {{- toYaml .Values.security.containerSecurityContext | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mc alias set store "http://{{ .Values.backup.objectStore.endpoint }}" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null
+                  while read -r base chemin; do
+                    [ "$chemin" = "AUCUN" ] && continue
+                    mc cp --quiet "$chemin" "/restore/$base.dump"
+                  done < /restore/choix
+                  ls -lh /restore
+              env:
+                - name: ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: access-key }
+                - name: SECRET_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.backup.objectStore.credentialsSecret }}, key: secret-key }
+                - name: MC_CONFIG_DIR
+                  value: /tmp/.mc
+                - name: HOME
+                  value: /tmp
+              volumeMounts:
+                - { name: restore, mountPath: /restore }
+                - { name: tmp,     mountPath: /tmp }
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          containers:
+            - name: epreuve
+              image: {{ include "database.image" $ | quote }}
+              securityContext:
+                {{- toYaml .Values.security.containerSecurityContext | nindent 16 }}
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+
+                  # ── L'instance jetable : socket locale seulement, aucun port.
+                  export PGDATA=/scratch/data
+                  initdb -D "$PGDATA" -U postgres --auth=trust >/dev/null
+                  pg_ctl -D "$PGDATA" -l /scratch/postgres.log -w start \
+                    -o "-c listen_addresses='' -k /scratch -c fsync=off -c full_page_writes=off"
+                  jetable() { psql -h /scratch -U postgres -X -q -t -A "$@"; }
+
+                  # ── La production, en lecture : de quoi comparer.
+                  echo "→ attente de la base de production…"
+                  i=0
+                  until pg_isready -h postgres -p {{ .Values.postgres.port }} -U "$PGUSER" -q; do
+                    i=$((i + 1))
+                    [ "$i" -gt 60 ] && { echo "✗ base de production injoignable après 5 minutes"; exit 1; }
+                    sleep 5
+                  done
+                  prod() { psql -h postgres -p {{ .Values.postgres.port }} -X -q -t -A "$@"; }
+
+                  REQ_TABLES="select count(*) from pg_tables where schemaname not in ('pg_catalog','information_schema')"
+                  # Lignes vivantes selon les statistiques : une estimation, suffisante pour
+                  # voir un écart grossier, sans compter table par table.
+                  REQ_LIGNES="select coalesce(sum(n_live_tup),0) from pg_stat_user_tables"
+
+                  maintenant="$(date -u +%s)"
+                  echec=0
+                  printf '%-20s %8s %12s %8s %12s %6s\n' base tables lignes~ prod.t prod.lignes~ âge.h
+                  while read -r base chemin; do
+                    if [ "$chemin" = "AUCUN" ]; then
+                      echo "✗ $base : aucun dump dans le seau"; echec=1; continue
+                    fi
+                    # <base>-AAAAMMJJTHHMMSSZ.dump → âge en heures.
+                    horo="${chemin##*-}"; horo="${horo%.dump}"
+                    quand="${horo:0:4}-${horo:4:2}-${horo:6:2} ${horo:9:2}:${horo:11:2}:${horo:13:2}"
+                    age=$(( (maintenant - $(date -u -d "$quand" +%s)) / 3600 ))
+                    if [ "$age" -gt {{ .Values.restoreCheck.maxAgeHours }} ]; then
+                      echo "✗ $base : dernier dump vieux de ${age} h (> {{ .Values.restoreCheck.maxAgeHours }} h) — la sauvegarde ne passe plus"
+                      echec=1
+                    fi
+
+                    jetable -d postgres -c "create database \"$base\""
+                    if ! pg_restore -h /scratch -U postgres -d "$base" --no-owner --no-acl \
+                           --exit-on-error "/restore/$base.dump" 2> "/scratch/$base.err"; then
+                      echo "✗ $base : pg_restore a échoué"; sed 's/^/    /' "/scratch/$base.err"; echec=1; continue
+                    fi
+                    jetable -d "$base" -c "analyze"
+
+                    t_r="$(jetable -d "$base" -c "$REQ_TABLES")"
+                    l_r="$(jetable -d "$base" -c "$REQ_LIGNES")"
+                    t_p="$(prod -d "$base" -c "$REQ_TABLES" || echo '?')"
+                    l_p="$(prod -d "$base" -c "$REQ_LIGNES" || echo '?')"
+                    printf '%-20s %8s %12s %8s %12s %6s\n' "$base" "$t_r" "$l_r" "$t_p" "$l_p" "$age"
+
+                    if [ "$t_r" = "0" ] && [ "$t_p" != "0" ] && [ "$t_p" != "?" ]; then
+                      echo "✗ $base : base restaurée vide, la production a $t_p tables"; echec=1
+                    elif [ "$t_r" != "$t_p" ]; then
+                      echo "⚠ $base : $t_r tables restaurées, $t_p en production (migration depuis le dump ?)"
+                    fi
+                    rm -f "/restore/$base.dump"
+                  done < /restore/choix
+
+                  pg_ctl -D "$PGDATA" -m fast -w stop >/dev/null
+                  [ "$echec" -eq 0 ] || { echo "✗ épreuve de restauration en échec"; exit 1; }
+                  echo "✓ restauration éprouvée pour toutes les bases"
+              env:
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: username }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.superuserSecret }}, key: password }
+              volumeMounts:
+                - { name: restore, mountPath: /restore }
+                - { name: scratch, mountPath: /scratch }
+                - { name: tmp,     mountPath: /tmp }
+              resources:
+                {{- toYaml .Values.restoreCheck.resources | nindent 16 }}
+          volumes:
+            - name: restore
+              emptyDir:
+                sizeLimit: {{ .Values.restoreCheck.dumpSize }}
+            # L'instance jetable vit sur disque : une base restaurée ne tient pas
+            # forcément en mémoire.
+            - name: scratch
+              emptyDir:
+                sizeLimit: {{ .Values.restoreCheck.scratchSize }}
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 32Mi
+{{- end }}

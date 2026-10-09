@@ -175,6 +175,47 @@ createdb -h localhost -U postgres findout_restore
 pg_restore -h localhost -U postgres -d findout_restore --no-owner findout-*.dump
 ```
 
+### Épreuve automatique (chaque dimanche)
+
+Le CronJob `restore-check` fait ce geste à la place de quelqu'un, pour toutes
+les bases : il prend le **dernier** dump de chacune, le rejoue dans un
+PostgreSQL **jetable lancé dans le pod** (rien n'est écrit dans l'instance de
+production) et compare tables et lignes avec la production. Aucune IA : le
+verdict est mécanique.
+
+Il **échoue** si un dump manque, a plus de `restoreCheck.maxAgeHours` heures
+(la sauvegarde nocturne ne passe plus), ne se restaure pas, ou se restaure vide
+alors que la production ne l'est pas. Un écart du nombre de tables est
+seulement signalé (une migration a pu passer depuis le dump).
+
+```bash
+kubectl -n database create job --from=cronjob/restore-check essai-restauration
+kubectl -n database logs -f job/essai-restauration -c epreuve
+```
+
+```
+base                   tables      lignes~   prod.t prod.lignes~ âge.h
+findout                    12        48210       12        48377     26
+…
+✓ restauration éprouvée pour toutes les bases
+```
+
+**Les alertes à poser** (vmalert, à partir des métriques de kube-state-metrics) —
+sans elles, l'épreuve échoue en silence :
+
+```yaml
+- alert: EpreuveRestaurationEnEchec
+  expr: kube_job_status_failed{namespace="database", job_name=~"restore-check-.*"} > 0
+  labels: { severity: warning }
+  annotations:
+    summary: "L'épreuve de restauration a échoué — kubectl -n database logs job/{{ $labels.job_name }} -c epreuve"
+- alert: EpreuveRestaurationAbsente
+  expr: time() - kube_cronjob_status_last_successful_time{namespace="database", cronjob="restore-check"} > 8 * 86400
+  labels: { severity: warning }
+  annotations:
+    summary: "Aucune épreuve de restauration réussie depuis plus de 8 jours"
+```
+
 ## 5. Vérification
 
 ```bash
