@@ -117,6 +117,9 @@ tenants:
   # Warhammer JdR, Personnages — https://github.com/hseb72/wh4chars (ns `wh4chars`)
   - name: wh4chars
     database: wh4chars
+  # 3S - Pro Learning — portail de formation (production) — https://github.com/hseb72/prolearning (ns `prolearning`)
+  - name: prolearning
+    database: prolearning
   # 3S - Pro Learning — espace démonstration — https://github.com/hseb72/prolearning (ns `prolearning`)
   - name: prolearning-demo
     database: prolearning_demo
