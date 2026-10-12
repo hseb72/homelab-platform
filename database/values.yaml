@@ -120,6 +120,9 @@ tenants:
   # 3S - Pro Learning — portail de formation (production) — https://github.com/hseb72/prolearning (ns `prolearning`)
   - name: prolearning
     database: prolearning
+  # 3S - Pro Learning — espace démonstration — https://github.com/hseb72/prolearning (ns `prolearning`)
+  - name: prolearning-demo
+    database: prolearning_demo
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   database: rental
