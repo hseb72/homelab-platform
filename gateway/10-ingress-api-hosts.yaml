@@ -220,3 +220,38 @@ spec:
                 name: kong-proxy
                 port:
                   number: 80
+
+# ─────────────────────────────────────────────────────────────────────────────
+# prolearning — https://github.com/hseb72/prolearning
+#
+# Routes Kong dans le namespace de l'application (`prolearning`). L'hôte, lui, vit
+# ici : c'est le socle qui possède le namespace `gateway`.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prolearning-api
+  namespace: gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "200m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.prolearning.crealcs.com
+      secretName: prolearning-api-tls
+  rules:
+    - host: api.prolearning.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80
