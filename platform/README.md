@@ -34,6 +34,43 @@ se réconcilie.
 `vault operator init` + unseal, puis activer l'auth Kubernetes et le moteur de
 secrets base de données. Le chart livre Vault mais ne détient aucun secret.
 
+## Bootstrap Argo CD (hors-bande, une fois)
+
+Deux réglages d'Argo, posés une fois sur le cluster — sans eux l'opérateur
+CloudNativePG reste bloqué (OutOfSync puis échec de sync). Ce sont des réglages
+du *cluster*, pas du chart.
+
+1. **Ignorer le `.status` au calcul de diff.** En Server-Side Apply, Argo
+   reconstruit un objet typé depuis la ressource vivante ; le `.status` du
+   Deployment de l'opérateur porte des champs récents (`terminatingReplicas`,
+   K8s ≥ 1.33) absents du schéma embarqué d'Argo → la comparaison échoue
+   (`field not declared in schema`, statut `Unknown`). On retire le `.status`
+   du diff (il appartient au cluster, pas à l'état désiré) :
+
+   ```bash
+   kubectl -n argocd patch configmap argocd-cm --type merge -p \
+     '{"data":{"resource.compareoptions":"ignoreResourceStatusField: all\n"}}'
+   kubectl -n argocd rollout restart statefulset argocd-application-controller
+   ```
+
+2. **Purger le résidu `last-applied-configuration` sur les CRD CNPG.** Les
+   anciens apply client-side (helm/Argo) ont posé sur les CRD une annotation
+   contenant le manifeste complet — énorme. Même en SSA, l'API server valide
+   l'objet entier et rejette l'écriture (`metadata.annotations: Too long`) tant
+   que ce résidu est là. À faire **une fois**, après être passé en SSA (le SSA
+   ne la réécrit jamais) :
+
+   ```bash
+   for crd in $(kubectl get crd -o name | grep postgresql.cnpg.io); do
+     kubectl annotate "$crd" kubectl.kubernetes.io/last-applied-configuration-
+   done
+   kubectl -n argocd patch application platform-cnpg-operator --type merge -p \
+     '{"operation":{"initiatedBy":{"username":"manual"},"sync":{"prune":true,"syncOptions":["CreateNamespace=true","ServerSideApply=true"]}}}'
+   ```
+
+   (Le `patch .operation` force un sync immédiat sans la CLI `argocd` ; le
+   controller surveille ce champ.)
+
 ## Phase 3 — bascule de l'edge (fenêtre big-bang, une seule IP)
 
 `ingress`, `kong` et `routeReport` sont activés dans `instance.yaml`, avec les
