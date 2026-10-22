@@ -94,6 +94,16 @@ argocd app sync platform
 kubectl -n ingress get deploy,svc         # LoadBalancer, EXTERNAL-IP = IP du nœud
 kubectl -n kong get pods,svc              # kong-proxy (ClusterIP)
 
+# 2b. CoreDNS : repointer la résolution interne *.crealcs.com vers le NOUVEL edge.
+#     Le ConfigMap coredns-custom (kube-system) réécrit *.crealcs.com vers le
+#     Service du contrôleur ; sa cible doit nommer le ns du nouvel edge (`ingress`).
+#     Oublié, *.crealcs.com = NXDOMAIN en interne → TOUT self-check ACME échoue et
+#     les nouveaux certs restent `pending` (piège vécu : les certs .system bloqués).
+kubectl -n kube-system patch configmap coredns-custom --type merge -p \
+  '{"data":{"crealcs.override":"rewrite name regex (.+)\\.crealcs\\.com platform-ingress-ingress-nginx-controller.ingress.svc.cluster.local answer auto\n"}}'
+kubectl -n kube-system rollout restart deployment coredns
+# vérif depuis un pod : nslookup <hôte>.crealcs.com → ClusterIP de l'edge, pas NXDOMAIN
+
 # 3. Vérifier (depuis l'extérieur de préférence)
 curl -kI https://<hôte-public>/           # UI servie directement par l'edge
 curl -kI https://<hôte-api>/api/…         # /api acheminé par Kong

@@ -14,9 +14,8 @@ spec:
     - https://github.com/hseb72/homelab-platform.git
   destinations:
     - { server: https://kubernetes.default.svc, namespace: sso }
-    # À venir, au fil de l'extraction :
-    # - { server: https://kubernetes.default.svc, namespace: argocd }
-    # - { server: https://kubernetes.default.svc, namespace: monitoring }
+    - { server: https://kubernetes.default.svc, namespace: argocd }   # frontal UI (ingress)
+    # (le monitoring est une release Helm CLI, pas une Application Argo.)
   # Le SSO n'a que des ressources namespacees (Deployment, Service, Ingress,
   # Cluster CNPG, Certificate). Pas de cluster-scoped → liste vide.
   clusterResourceWhitelist: []
