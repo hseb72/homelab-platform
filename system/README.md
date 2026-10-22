@@ -13,7 +13,7 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 |---|---|---|---|
 | **SSO** (Keycloak) | `sso` | `sso.crealcs.com` (canonique, issuer OIDC) + `sso.system.crealcs.com` (alias) | **extrait** → `system/sso/` |
 | **Argo CD** | `argocd` | `argocd.system.crealcs.com` | à faire |
-| **Monitoring** (Grafana/VictoriaMetrics) | `monitoring` | `grafana.system.crealcs.com` | à faire |
+| **Monitoring** (Grafana/VictoriaMetrics) | `monitoring` | `grafana.system.crealcs.com` | **extrait (Helm CLI)** → `system/monitoring/` |
 
 > Le SSO garde `sso.crealcs.com` comme hôte **canonique** : c'est l'issuer OIDC codé
 > dans tous les clients. Le schéma `.system` ne s'y applique qu'en **alias**. Pour
@@ -37,8 +37,9 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 2. **Argo CD.** Sortir `rental-platform/k8s/argocd/` ; basculer l'hôte sur
    `argocd.system.crealcs.com`. Délicat (Argo se gère lui-même) : bascule d'ingress
    d'abord, migration de propriété ensuite.
-3. **Monitoring.** Sortir `rental-platform/k8s/monitoring/` ; hôte
-   `grafana.system.crealcs.com`.
+3. **Monitoring — fait.** `system/monitoring/` (release Helm CLI, valeurs ici,
+   hôte `grafana.system.crealcs.com`). Les dashboards/scrapes spécifiques à une
+   appli restent chez elle.
 4. **Nettoyage xpms.** Retirer `tools`/`monitoring` des destinations du projet Argo
    de xpms ; retirer `k8s/{argocd,monitoring,sso,gateway}` de rental-platform une
    fois chaque outil repris ici (le `gateway` est déjà remplacé par le socle, ns `kong`).
