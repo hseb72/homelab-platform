@@ -32,8 +32,9 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 
 ## Prochaines étapes
 
-1. **SSO — fait.** `system/sso/` (cf. son README). Reste à lever le couplage de
-   l'**image** Keycloak (build encore dans rental-platform).
+1. **SSO — fait.** `system/sso/` (cf. son README). Image Keycloak : build déplacé
+   ici (`Dockerfile` + `build-keycloak.yml`) → publier puis repointer l'image dans
+   `20-keycloak.yaml` (séquence dans le README SSO).
 2. **Argo CD — fait (partiel).** `system/argocd/` : frontal UI repris en GitOps
    (`argocd.system.crealcs.com`). L'install d'Argo CD reste un bootstrap manuel
    (version épinglée) — le passer en self-managed est une amélioration possible.

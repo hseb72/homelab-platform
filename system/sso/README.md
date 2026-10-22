@@ -69,10 +69,20 @@ Console admin : `https://sso.crealcs.com/admin/` (login = secret `keycloak-admin
   dans le ConfigMap `coredns-custom` (kube-system) pointant l'IP interne, sinon le
   cert reste `pending`.
 
-## Couplage résiduel à lever (suite)
+## Image Keycloak (build ici)
 
-L'**image** `ghcr.io/hseb72/rental-platform/keycloak:26.0` est encore construite par
-le dépôt rental-platform (`k8s/sso/Dockerfile` + workflow « Build Keycloak Image »).
-Déplacer ce Dockerfile + workflow ici (ou dans un dépôt SSO dédié) achèverait la
-décorrélation. Non bloquant : l'image est immuable et le déploiement est déjà
-indépendant.
+L'image pré-augmentée est désormais construite **dans ce dépôt** :
+[`Dockerfile`](Dockerfile) + workflow [`build-keycloak.yml`](../../.github/workflows/build-keycloak.yml)
+→ publie `ghcr.io/hseb72/homelab-platform/keycloak:26.0`. Plus de dépendance au
+dépôt rental-platform.
+
+Bascule (pour éviter toute coupure SSO — le Deployment est en `strategy: Recreate`) :
+1. Publier l'image ici (merge du Dockerfile sur `main`, ou *Run workflow*) et
+   **attendre** qu'elle soit disponible dans GHCR.
+2. Repointer `image:` dans `20-keycloak.yaml` vers
+   `ghcr.io/hseb72/homelab-platform/keycloak:26.0`.
+3. Retirer le `Dockerfile` + workflow de rental-platform.
+
+> ⚠ Runner : le workflow cible le runner self-hosted `[self-hosted, proxmox]` de
+> l'org. S'il n'est pas disponible pour ce dépôt, basculer sur `ubuntu-latest`
+> (simple docker build).

@@ -1,0 +1,68 @@
+# Construit l'image Keycloak pré-augmentée (cf. system/sso/Dockerfile).
+#
+# Déplacée depuis rental-platform : l'image fait partie du tooling de plateforme
+# (SSO), elle n'a rien à voir avec le monorepo applicatif. Ne change qu'à la
+# montée de version de Keycloak ou de ses options de build.
+#
+# Le déploiement est GitOps (Application `sso`) : après publication d'un nouveau
+# tag, repointer system/sso/20-keycloak.yaml si le tag bouge, sinon
+# `kubectl -n sso rollout restart deploy/keycloak`.
+
+name: Build Keycloak Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "system/sso/Dockerfile"
+      - ".github/workflows/build-keycloak.yml"
+
+concurrency:
+  group: build-keycloak
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  # → ghcr.io/hseb72/homelab-platform/keycloak
+  IMAGE: ghcr.io/${{ github.repository }}/keycloak
+  # Version de base — à faire évoluer en même temps que le FROM du Dockerfile.
+  KC_VERSION: "26.0"
+
+jobs:
+  build:
+    # Runner self-hosted de l'org (comme côté rental-platform). Si indisponible
+    # pour ce dépôt, basculer sur `ubuntu-latest` (le build est un simple
+    # docker build, pas de matériel particulier requis).
+    runs-on: [self-hosted, proxmox]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: system/sso
+          file: system/sso/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.KC_VERSION }}
+            ${{ env.IMAGE }}:${{ env.KC_VERSION }}-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Rappel de déploiement
+        run: |
+          echo "Image publiée : ${{ env.IMAGE }}:${{ env.KC_VERSION }}"
+          echo "Repointer system/sso/20-keycloak.yaml si besoin, ou :"
+          echo "kubectl -n sso rollout restart deploy/keycloak"
