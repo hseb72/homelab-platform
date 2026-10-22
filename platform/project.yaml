@@ -1,0 +1,38 @@
+# AppProject du socle partagé. Il gouverne l'app-of-apps `platform` et les
+# Applications qu'elle génère (chacune dans son namespace).
+#
+# Périmètre volontairement plus large que celui des composants maison : le socle
+# INSTALLE des opérateurs (CNPG) et des moteurs (Vault, Kong, ingress-nginx) qui
+# posent des ressources cluster-scoped (CRD, ClusterRoles, webhooks). À resserrer
+# une fois l'ensemble stabilisé.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Socle partagé — instance de platform-patterns (charts/platform)
+  sourceRepos:
+    - ghcr.io/hseb72/platform-patterns            # chart OCI (app-of-apps)
+    - https://github.com/hseb72/homelab-platform.git   # nos valeurs
+    # Charts amont tirés par les Applications générées :
+    - https://kubernetes.github.io/ingress-nginx
+    - https://charts.konghq.com
+    - https://helm.releases.hashicorp.com
+    - https://cloudnative-pg.github.io/charts
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: argocd }
+    - { server: https://kubernetes.default.svc, namespace: ingress }
+    - { server: https://kubernetes.default.svc, namespace: kong }
+    - { server: https://kubernetes.default.svc, namespace: vault }
+    - { server: https://kubernetes.default.svc, namespace: postgres }
+    - { server: https://kubernetes.default.svc, namespace: minio }
+    - { server: https://kubernetes.default.svc, namespace: redis }
+    - { server: https://kubernetes.default.svc, namespace: cnpg-system }
+    - { server: https://kubernetes.default.svc, namespace: route-report }
+  # Les opérateurs/moteurs créent des ressources cluster-scoped (CRD, RBAC,
+  # webhooks) : on ouvre, puis on resserrera.
+  clusterResourceWhitelist:
+    - { group: "*", kind: "*" }
+  namespaceResourceWhitelist:
+    - { group: "*", kind: "*" }

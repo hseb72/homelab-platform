@@ -1,0 +1,133 @@
+# Instance du socle partagé — valeurs pour le chart `platform` de
+# platform-patterns 1.0.0. Ce dépôt est le REPO D'OPS (cf.
+# docs/alignement-patterns-1.0.0.md). Aucun secret ici.
+#
+# ── Phasage ───────────────────────────────────────────────────────────────────
+# Phase 1 : datastores + Vault + CNPG montent À CÔTÉ de l'existant (namespaces
+#           neufs, aucun conflit avec la prod).
+# Phase 3 : on passe `ingress`, `kong` et `routeReport` à `enabled: true` — c'est
+#           la bascule de l'edge (une seule IP publique, fenêtre big-bang).
+
+global:
+  storageClass: local-path        # k3s
+
+networkPolicies:
+  enabled: true
+
+# ── PostgreSQL (CloudNativePG) — ns `postgres` ───────────────────────────────
+postgres:
+  enabled: true
+  namespace: postgres
+  createNamespace: true
+  clientNamespaceLabel: platform-patterns.io/postgres-client   # défaut, explicite
+  operatorNamespace: cnpg-system
+  clusterName: postgres           # → service `postgres-rw.postgres.svc`
+  instances: 1                    # nœud unique : 1 instance (pas de HILA utile ici)
+  storageSize: 20Gi
+  parameters:
+    max_connections: "200"
+    shared_buffers: 256MB
+  # Requis pour que le provisionnement self-service des apps crée leurs
+  # bases/rôles (le superutilisateur CNPG est dans un Secret géré par CNPG).
+  enableSuperuserAccess: true
+  monitoring: true                # repris par VictoriaMetrics
+  # Sauvegarde/PITR CNPG vers le MinIO mutualisé — À ACTIVER après la phase 2
+  # (remplace la sauvegarde maison). Demande un Secret S3 hors chart.
+  backup:
+    enabled: false
+
+# ── MinIO — ns `minio` ───────────────────────────────────────────────────────
+minio:
+  enabled: true
+  namespace: minio
+  createNamespace: true
+  clientNamespaceLabel: platform-patterns.io/minio-client
+  # Même image/tag que la prod, sur quay.io (Docker Hub déprécié par MinIO).
+  image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+  # Secret racine (root-user / root-password), créé HORS chart puis scellé.
+  credentialsSecret: platform-minio
+  storageSize: 20Gi
+  apiPort: 9000
+  consolePort: 9001
+
+# ── Redis — ns `redis` ───────────────────────────────────────────────────────
+redis:
+  enabled: true
+  namespace: redis
+  createNamespace: true
+  clientNamespaceLabel: platform-patterns.io/redis-client
+  image: redis:7.4.3             # aligné sur la prod
+  storageSize: 1Gi
+  port: 6379
+
+# ── App-of-apps : destination Argo des Applications générées ─────────────────
+argocd:
+  namespace: argocd
+  project: platform              # cf. platform/project.yaml
+  destinationServer: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+# ── CloudNativePG (opérateur) — ns `cnpg-system` ─────────────────────────────
+cnpgOperator:
+  enabled: true
+  namespace: cnpg-system
+  chart:
+    repoURL: https://cloudnative-pg.github.io/charts
+    name: cloudnative-pg
+    version: 0.22.1              # confirmer/relever (prod rental : série 0.23.x)
+
+# ── Vault (HashiCorp CE) + injector — ns `vault` ─────────────────────────────
+# Livré dès la phase 1 ; bootstrap init/unseal + moteur DB hors-bande, une fois.
+vault:
+  enabled: true
+  namespace: vault
+  chart:
+    repoURL: https://helm.releases.hashicorp.com
+    name: vault
+    version: 0.28.1
+  values:
+    injector:
+      enabled: true
+
+# ── Edge ingress (ingress-nginx) — ns `ingress` ── PHASE 3 ───────────────────
+# `front` chez les patterns ; renommé `ingress` ici (cf. doc §2). Les apps le
+# désignent par `shared.webIngress.controllerNamespace: ingress`.
+ingress:
+  enabled: false                 # ← passer à true en phase 3 (bascule edge)
+  namespace: ingress
+  chart:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    name: ingress-nginx
+    version: 4.12.1              # version déjà en prod
+  values:
+    controller:
+      ingressClassResource:
+        name: nginx
+      service:
+        type: LoadBalancer       # k3s ServiceLB → IP du nœud (:80/:443)
+      # WAF ModSecurity/CRS + proxy-protocol : reprendre
+      # platform-ingress/values-ingress-nginx.yaml lors de la bascule.
+
+# ── Kong (API gateway, Ingress Controller) — ns `kong` ── PHASE 3 ────────────
+kong:
+  enabled: false                 # ← passer à true en phase 3
+  namespace: kong
+  chart:
+    repoURL: https://charts.konghq.com
+    name: kong
+    version: 2.41.1
+  values:
+    ingressController:
+      enabled: true
+    proxy:
+      type: ClusterIP            # derrière l'edge, jamais exposé direct
+
+# ── Report de routes (page HTML privée) — ns `route-report` ── PHASE 3 ───────
+routeReport:
+  enabled: false                 # ← utile une fois Kong en service (phase 3)
+  namespace: route-report
+  createNamespace: true
+  schedule: "*/15 * * * *"

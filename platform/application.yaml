@@ -1,0 +1,43 @@
+# App-of-apps du socle partagé : instancie le chart `platform` de
+# platform-patterns (épinglé 1.0.0) avec nos valeurs (platform/instance.yaml).
+#
+# Multi-source : le chart vient de l'OCI publié par platform-patterns, les
+# valeurs viennent de CE dépôt (ref `values`). Le chart génère une Application
+# Argo par outil (ingress, kong, vault, opérateur CNPG) plus la glue (Cluster
+# CNPG, MinIO, Redis, namespaces, NetworkPolicies, report).
+#
+# ⚠ Ne PAS appliquer avant revue (phase 1). En phase 1, `ingress`/`kong` sont
+# désactivés dans instance.yaml : le socle canonique monte à côté de l'existant.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    # Le chart, depuis l'OCI de platform-patterns (immuable, opt-in).
+    - repoURL: ghcr.io/hseb72/platform-patterns
+      chart: platform
+      targetRevision: 1.0.0
+      helm:
+        valueFiles:
+          - $values/platform/instance.yaml
+    # Nos valeurs, depuis ce dépôt.
+    - repoURL: https://github.com/hseb72/homelab-platform.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd           # les Applications générées vivent ici
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }
