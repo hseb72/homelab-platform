@@ -56,6 +56,13 @@ fait sans interruption de service.
   ACL, exposition d'API). Gabarits copiables dans
   [`examples/consumer-app/`](examples/consumer-app/).
 
+## Évoluer
+
+- **[`docs/alignement-patterns-1.0.0.md`](docs/alignement-patterns-1.0.0.md)** —
+  le plan d'alignement sur [`platform-patterns`](https://github.com/hseb72/platform-patterns)
+  1.0.0 (adoption de `charts/platform`, Vault, CloudNativePG) et la procédure de
+  migration des applications. Scaffolding dans [`platform/`](platform/).
+
 ## Automatiser
 
 - **[`AGENTS.md`](AGENTS.md)** — le guichet d'onboarding (issue → PR), les clés
