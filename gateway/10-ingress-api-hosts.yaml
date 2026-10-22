@@ -189,3 +189,41 @@ spec:
                 name: kong-proxy
                 port:
                   number: 80
+
+# ─────────────────────────────────────────────────────────────────────────────
+# xpms (rental-platform) — https://github.com/hseb72/rental-platform
+#
+# Contrairement aux SPA (relais /api même-origine), les fronts xpms appellent
+# l'API CÔTÉ NAVIGATEUR sur cet hôte → il DOIT fonctionner, sinon CORS/ERR_FAILED.
+# Route Kong : backend/rental-api (reconnaît api.xpms.crealcs.com + préserve le
+# Host pour la résolution de tenant). Remplace l'ancien Ingress gateway/api
+# (backend kong-proxy dans l'ancien ns `gateway`, disparu → 503).
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xpms-api
+  namespace: kong
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.xpms.crealcs.com
+      secretName: xpms-api-tls
+  rules:
+    - host: api.xpms.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80
