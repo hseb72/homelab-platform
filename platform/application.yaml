@@ -1,13 +1,15 @@
 # App-of-apps du socle partagé : instancie le chart `platform` de
-# platform-patterns (épinglé 1.0.0) avec nos valeurs (platform/instance.yaml).
+# platform-patterns (épinglé 1.1.0) avec nos valeurs (platform/instance.yaml).
 #
 # Multi-source : le chart vient de l'OCI publié par platform-patterns, les
 # valeurs viennent de CE dépôt (ref `values`). Le chart génère une Application
 # Argo par outil (ingress, kong, vault, opérateur CNPG) plus la glue (Cluster
 # CNPG, MinIO, Redis, namespaces, NetworkPolicies, report).
 #
-# ⚠ Ne PAS appliquer avant revue (phase 1). En phase 1, `ingress`/`kong` sont
-# désactivés dans instance.yaml : le socle canonique monte à côté de l'existant.
+# ⚠ Phase 3 : `ingress`/`kong`/`routeReport` sont désormais ACTIVÉS dans
+# instance.yaml → une synchro fait la BASCULE de l'edge. Retirer l'ancien edge
+# (helm uninstall platform-ingress + kong) AVANT de synchroniser, sinon le 2ᵉ
+# Service LoadBalancer reste Pending (une seule IP publique). Runbook : README.md.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -21,7 +23,7 @@ spec:
     # Le chart, depuis l'OCI de platform-patterns (immuable, opt-in).
     - repoURL: ghcr.io/hseb72/platform-patterns
       chart: platform
-      targetRevision: 1.0.0
+      targetRevision: 1.1.0
       helm:
         valueFiles:
           - $values/platform/instance.yaml
