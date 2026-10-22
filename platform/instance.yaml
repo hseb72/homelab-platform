@@ -1,12 +1,13 @@
 # Instance du socle partagé — valeurs pour le chart `platform` de
-# platform-patterns 1.0.0. Ce dépôt est le REPO D'OPS (cf.
+# platform-patterns (≥ 1.1.0). Ce dépôt est le REPO D'OPS (cf.
 # docs/alignement-patterns-1.0.0.md). Aucun secret ici.
 #
 # ── Phasage ───────────────────────────────────────────────────────────────────
-# Phase 1 : datastores + Vault + CNPG montent À CÔTÉ de l'existant (namespaces
-#           neufs, aucun conflit avec la prod).
-# Phase 3 : on passe `ingress`, `kong` et `routeReport` à `enabled: true` — c'est
-#           la bascule de l'edge (une seule IP publique, fenêtre big-bang).
+# Phase 1 : datastores + Vault + CNPG (faits).
+# Phase 3 : edge activé — `ingress`, `kong`, `routeReport`. BASCULE big-bang à une
+#           seule IP publique : retirer l'ancien edge (helm uninstall
+#           platform-ingress + kong) AVANT la synchro, sinon le 2ᵉ LoadBalancer
+#           reste Pending. Runbook : platform/README.md.
 
 global:
   storageClass: local-path        # k3s
@@ -78,6 +79,11 @@ cnpgOperator:
     repoURL: https://cloudnative-pg.github.io/charts
     name: cloudnative-pg
     version: 0.22.1              # confirmer/relever (prod rental : série 0.23.x)
+  # Les CRD CNPG dépassent la limite d'annotation de l'apply client-side ; le
+  # Server-Side Apply l'évite (sinon OutOfSync/SyncError permanent). Requiert
+  # platform ≥ 1.1.0.
+  syncOptions:
+    - ServerSideApply=true
 
 # ── Vault (HashiCorp CE) + injector — ns `vault` ─────────────────────────────
 # Livré dès la phase 1 ; bootstrap init/unseal + moteur DB hors-bande, une fois.
@@ -91,12 +97,22 @@ vault:
   values:
     injector:
       enabled: true
+  # L'injector écrit le caBundle de son webhook à l'exécution → dérive
+  # cosmétique ; on l'ignore. Requiert platform ≥ 1.1.0.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - '.webhooks[].clientConfig.caBundle'
 
-# ── Edge ingress (ingress-nginx) — ns `ingress` ── PHASE 3 ───────────────────
+# ── Edge ingress (ingress-nginx) — ns `ingress` ──────────────────────────────
 # `front` chez les patterns ; renommé `ingress` ici (cf. doc §2). Les apps le
 # désignent par `shared.webIngress.controllerNamespace: ingress`.
+# Valeurs portées depuis platform-ingress/values-ingress-nginx.yaml (l'edge
+# actuel) : classe `nginx`, Service LoadBalancer (même IP nœud), WAF en
+# observation, webhook d'admission désactivé.
 ingress:
-  enabled: false                 # ← passer à true en phase 3 (bascule edge)
+  enabled: true
   namespace: ingress
   chart:
     repoURL: https://kubernetes.github.io/ingress-nginx
@@ -104,30 +120,101 @@ ingress:
     version: 4.12.1              # version déjà en prod
   values:
     controller:
+      watchNamespaces: ""        # sert toutes les apps
       ingressClassResource:
-        name: nginx
+        name: nginx              # NE PAS renommer : tous les Ingress ciblent `nginx`
+        enabled: true
+        default: false
+        controllerValue: k8s.io/ingress-nginx
+      ingressClass: nginx
       service:
         type: LoadBalancer       # k3s ServiceLB → IP du nœud (:80/:443)
-      # WAF ModSecurity/CRS + proxy-protocol : reprendre
-      # platform-ingress/values-ingress-nginx.yaml lors de la bascule.
+      replicaCount: 1
+      config:
+        # DNAT direct : trafic en TCP nu, pas de proxy_protocol.
+        use-proxy-protocol: "false"
+        # WAF ModSecurity + CRS OWASP, EN OBSERVATION (cf. platform-ingress/WAF.md).
+        enable-modsecurity: "true"
+        enable-owasp-modsecurity-crs: "true"
+        # ⚠ AUCUN COMMENTAIRE NI APOSTROPHE dans le fragment : ingress-nginx
+        # l insere entoure d apostrophes ; la premiere fermerait la chaine.
+        modsecurity-snippet: |
+          SecRuleEngine DetectionOnly
+          SecRequestBodyAccess On
+          SecRequestBodyLimit 52428800
+          SecRequestBodyNoFilesLimit 1048576
+          SecRequestBodyLimitAction ProcessPartial
+          SecAuditEngine RelevantOnly
+          SecAuditLogParts ABFHZ
+          SecAuditLog /dev/stdout
+          SecAuditLogFormat JSON
+          SecAuditLogType Serial
+      # Webhook d'admission désactivé : un ValidatingWebhookConfiguration vers un
+      # service disparu bloquerait toute création/màj d'Ingress du cluster.
+      admissionWebhooks:
+        enabled: false
+      resources:
+        requests: { cpu: 200m, memory: 512Mi }
+        limits:   { cpu: "1",  memory: 1Gi }
 
-# ── Kong (API gateway, Ingress Controller) — ns `kong` ── PHASE 3 ────────────
+# ── Kong (API gateway, Ingress Controller) — ns `kong` ───────────────────────
+# Valeurs portées depuis gateway/values-kong.yaml. Kong est DERRIÈRE l'edge
+# (ClusterIP, jamais exposé direct) ; ne traite que `/api`.
 kong:
-  enabled: false                 # ← passer à true en phase 3
+  enabled: true
   namespace: kong
   chart:
     repoURL: https://charts.konghq.com
     name: kong
     version: 2.41.1
   values:
+    # Fige le nom du Service à `kong-proxy` (sinon préfixé du nom de release).
+    fullnameOverride: kong
+    image:
+      repository: kong
+      tag: "3.9"
+    env:
+      database: "off"            # DB-less : config poussée par le contrôleur d'Ingress
     ingressController:
       enabled: true
+      ingressClass: kong         # classe dédiée ; les Ingress `nginx` ne sont pas happés
+      watchNamespaces: []        # toutes : chaque app déclare ses routes chez elle
     proxy:
-      type: ClusterIP            # derrière l'edge, jamais exposé direct
+      type: ClusterIP
+      http:
+        enabled: true
+        servicePort: 80
+        containerPort: 8000
+      tls:
+        enabled: false           # TLS terminé par l'edge en amont
+    admin:
+      # Service supprimé (API d'admin injoignable d'ailleurs) MAIS écouteur local
+      # gardé : le contrôleur d'Ingress pousse la config par là. Tout couper
+      # bloque le pod en 0/2 sans message clair.
+      enabled: false
+      http:
+        enabled: true
+        containerPort: 8001
+      tls:
+        enabled: false
+    manager:   { enabled: false }
+    portal:    { enabled: false }
+    portalapi: { enabled: false }
+    status:
+      enabled: true
+      http:
+        enabled: true
+        containerPort: 8100
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: "1",  memory: 512Mi }
+    replicaCount: 1
+    serviceMonitor:
+      enabled: false             # la stack VM utilise VMServiceScrape
 
-# ── Report de routes (page HTML privée) — ns `route-report` ── PHASE 3 ───────
+# ── Report de routes (page HTML privée) — ns `route-report` ──────────────────
 routeReport:
-  enabled: false                 # ← utile une fois Kong en service (phase 3)
+  enabled: true
   namespace: route-report
   createNamespace: true
   schedule: "*/15 * * * *"
