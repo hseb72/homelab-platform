@@ -1,0 +1,152 @@
+# Valeurs de la stack VictoriaMetrics (chart vm/victoria-metrics-k8s-stack),
+# possédées par homelab-platform (plus par l'install xpms). Release Helm CLI
+# `monitoring` dans le ns `monitoring` (cf. README.md). Stack légère (~300-500 Mo)
+# plutôt que kube-prometheus-stack, pour tenir sur le nœud.
+#
+# L'opérateur VM convertit les ServiceMonitor (Prometheus Operator CRD) en
+# VMServiceScrape : chaque appli émet ses ServiceMonitor chez elle, scrapés sans
+# config ici. Les dashboards/scrapes spécifiques à une appli restent chez elle.
+
+# --- Base de temps : VictoriaMetrics single (stockage + requêtes) -------------
+vmsingle:
+  spec:
+    retentionPeriod: "10d"          # rétention courte adaptée au disque local
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 640Mi
+    storage:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 12Gi
+
+# --- Collecteur (scrape) ------------------------------------------------------
+vmagent:
+  spec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+
+# --- Alerting : vmalert évalue les règles, alertmanager route les alertes. -----
+# defaultRules crée les VMRule k8s/node standard. Récepteur Slack ; l'URL du
+# webhook est montée depuis le secret `alertmanager-slack` (hors Git).
+vmalert:
+  enabled: true
+  spec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+alertmanager:
+  enabled: true
+  spec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    # Monte le secret `alertmanager-slack` (clé `url` = webhook) dans le pod, à
+    # /etc/vm/secrets/alertmanager-slack/url. Jamais d'URL en clair dans Git.
+    secrets:
+      - alertmanager-slack
+  # Route toutes les alertes vers Slack. L'URL est lue via api_url_file.
+  # NB : canal `#xpms` historique — à renommer en canal de plateforme quand tu veux.
+  config:
+    route:
+      receiver: slack
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Watchdog (toujours firing, par design) + InfoInhibitor → poubelle.
+        - receiver: "null"
+          matchers: ['alertname="Watchdog"']
+        - receiver: "null"
+          matchers: ['alertname="InfoInhibitor"']
+    receivers:
+      - name: "null"
+      - name: slack
+        slack_configs:
+          - api_url_file: /etc/vm/secrets/alertmanager-slack/url
+            channel: "#xpms"
+            send_resolved: true
+            title: "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+            text: >-
+              {{ range .Alerts }}*{{ .Labels.severity }}* — {{ .Annotations.summary }}
+              {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+              {{ end }}
+defaultRules:
+  create: true
+
+# Composants control-plane NON exposés séparément sur k3s (fusionnés dans le
+# process k3s) → désactivés, sinon leurs scrapes sans cible déclenchent des
+# TargetDown / *Down en fausses alertes critiques.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# --- Exporters cluster (légers, utiles) ---------------------------------------
+kube-state-metrics:
+  enabled: true
+prometheus-node-exporter:
+  enabled: true
+
+# --- Opérateur VM : garder la conversion des CRD Prometheus (ServiceMonitor) --
+victoria-metrics-operator:
+  operator:
+    disable_prometheus_converter: false
+
+# --- Grafana : exposé en HTTPS via l'edge du socle (cert-manager HTTP-01) ------
+grafana:
+  enabled: true
+  # Identifiants dans le Secret `grafana-admin` (clés admin-user/admin-password),
+  # créé hors chart — jamais de mot de passe en clair ici.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # La datasource VictoriaMetrics (compatible Prometheus) est branchée par le
+  # chart vm-k8s-stack automatiquement. Dashboards k8s par défaut inclus.
+  defaultDashboardsEnabled: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-http01
+    # Schéma `*.system.crealcs.com` du tooling de plateforme (ex-grafana.xpms).
+    # Requiert un DNS grafana.system.crealcs.com (ou le wildcard *.system).
+    hosts:
+      - grafana.system.crealcs.com
+    path: /
+    pathType: Prefix
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.system.crealcs.com
+  # Grafana 13 + sidecars : 256Mi OOM au démarrage (crashloop). 512Mi suffit.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
