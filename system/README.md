@@ -12,7 +12,7 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 | Outil | Namespace | Hôte cible | Statut |
 |---|---|---|---|
 | **SSO** (Keycloak) | `sso` | `sso.crealcs.com` (canonique, issuer OIDC) + `sso.system.crealcs.com` (alias) | **extrait** → `system/sso/` |
-| **Argo CD** | `argocd` | `argocd.system.crealcs.com` | à faire |
+| **Argo CD** | `argocd` | `argocd.system.crealcs.com` | **extrait** (ingress UI en GitOps ; install = bootstrap manuel) → `system/argocd/` |
 | **Monitoring** (Grafana/VictoriaMetrics) | `monitoring` | `grafana.system.crealcs.com` | **extrait (Helm CLI)** → `system/monitoring/` |
 
 > Le SSO garde `sso.crealcs.com` comme hôte **canonique** : c'est l'issuer OIDC codé
@@ -34,9 +34,9 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 
 1. **SSO — fait.** `system/sso/` (cf. son README). Reste à lever le couplage de
    l'**image** Keycloak (build encore dans rental-platform).
-2. **Argo CD.** Sortir `rental-platform/k8s/argocd/` ; basculer l'hôte sur
-   `argocd.system.crealcs.com`. Délicat (Argo se gère lui-même) : bascule d'ingress
-   d'abord, migration de propriété ensuite.
+2. **Argo CD — fait (partiel).** `system/argocd/` : frontal UI repris en GitOps
+   (`argocd.system.crealcs.com`). L'install d'Argo CD reste un bootstrap manuel
+   (version épinglée) — le passer en self-managed est une amélioration possible.
 3. **Monitoring — fait.** `system/monitoring/` (release Helm CLI, valeurs ici,
    hôte `grafana.system.crealcs.com`). Les dashboards/scrapes spécifiques à une
    appli restent chez elle.

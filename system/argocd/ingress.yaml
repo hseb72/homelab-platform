@@ -1,0 +1,30 @@
+# Ingress UI Argo CD — HTTPS via l'edge du socle (classe nginx, cert-manager
+# HTTP-01). argocd-server tourne en --insecure (server.insecure=true, cf. README)
+# → backend HTTP :80.
+#
+# Hôte sur le schéma *.system.crealcs.com du tooling de plateforme (ex-argocd.xpms).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: argocd.system.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - argocd.system.crealcs.com
+      secretName: argocd-server-tls

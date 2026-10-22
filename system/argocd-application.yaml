@@ -1,0 +1,34 @@
+# Application Argo CD de l'INGRESS UI d'Argo (frontal `argocd.system.crealcs.com`),
+# possédée par homelab-platform. Ne gère QUE l'ingress (system/argocd/) ; l'install
+# d'Argo CD lui-même reste un bootstrap manuel (version épinglée, cf. le README).
+#
+# Argo gère ici une ressource de son propre namespace — usuel et sûr : l'objet
+# Ingress persiste même si Argo est arrêté.
+#
+# Bootstrap : kubectl apply -f system/project.yaml puis
+#             kubectl apply -f system/argocd-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: system
+  source:
+    repoURL: https://github.com/hseb72/homelab-platform.git
+    targetRevision: main
+    path: system/argocd
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }
