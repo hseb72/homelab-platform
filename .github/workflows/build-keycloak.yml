@@ -32,10 +32,10 @@ env:
 
 jobs:
   build:
-    # Runner self-hosted de l'org (comme côté rental-platform). Si indisponible
-    # pour ce dépôt, basculer sur `ubuntu-latest` (le build est un simple
-    # docker build, pas de matériel particulier requis).
-    runs-on: [self-hosted, proxmox]
+    # Runner GitHub-hosted : le build est un simple docker build (kc.sh build),
+    # aucun matériel particulier requis. Le runner self-hosted `[self-hosted,
+    # proxmox]` n'étant pas rattaché à ce dépôt, le run restait `queued`.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
