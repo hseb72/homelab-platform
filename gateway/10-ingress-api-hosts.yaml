@@ -1,11 +1,11 @@
-# Ingress de classe `nginx`, dans le namespace `gateway` : amène les hôtes d'API
+# Ingress de classe `nginx`, dans le namespace `kong` : amène les hôtes d'API
 # depuis le bord jusqu'à Kong.
 #
 # Pourquoi ici et pas dans le namespace de l'application : un Ingress ne peut
 # référencer qu'un Service de son propre namespace, et `kong-proxy` vit dans
-# `gateway`. C'est donc ce fichier qui grandit d'une entrée par application —
-# la seule ressource centralisée du dispositif, et elle ne contient que des
-# noms d'hôtes.
+# `kong` (socle platform-patterns ; anciennement `gateway`). C'est donc ce
+# fichier qui grandit d'une entrée par application — la seule ressource
+# centralisée du dispositif, et elle ne contient que des noms d'hôtes.
 #
 # ⚠ Aucune annotation touchant l'en-tête `Host` (pas d'`upstream-vhost`, pas de
 # réécriture) : la résolution de tenant en dépend, et une normalisation ferait
@@ -16,7 +16,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gw
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
@@ -53,7 +53,7 @@ spec:
 # kind: Ingress
 # metadata:
 #   name: api
-#   namespace: gateway
+#   namespace: kong
 #   annotations:
 #     cert-manager.io/cluster-issuer: letsencrypt-http01
 #     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
@@ -82,13 +82,13 @@ spec:
 #
 # L'application ne pose que ses routes Kong, dans son propre namespace
 # (`findout-backend`). L'hôte, lui, vit ici : c'est le socle qui possède le
-# namespace `gateway`, et une application n'écrit pas chez lui.
+# namespace `kong`, et une application n'écrit pas chez lui.
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: findout-api
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -124,7 +124,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: treasurehunters-api
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -160,7 +160,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: mtgwars-api
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -196,7 +196,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: wh4chars-api
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -225,13 +225,13 @@ spec:
 # prolearning — https://github.com/hseb72/prolearning
 #
 # Routes Kong dans le namespace de l'application (`prolearning`). L'hôte, lui, vit
-# ici : c'est le socle qui possède le namespace `gateway`.
+# ici : c'est le socle qui possède le namespace `kong`.
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: prolearning-api
-  namespace: gateway
+  namespace: kong
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-http01
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
