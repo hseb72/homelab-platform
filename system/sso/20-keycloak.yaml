@@ -1,0 +1,147 @@
+# Keycloak (distribution Quarkus, moderne). TLS terminé à l'ingress (cert-manager)
+# → Keycloak tourne en HTTP derrière le proxy, avec KC_PROXY_HEADERS=xforwarded et
+# KC_HOSTNAME en URL complète (sso.crealcs.com, issuer OIDC canonique).
+#
+# Secrets requis (créés hors Git, cf. README.md) :
+#   - keycloak-admin      (clés: username, password)  → compte admin bootstrap
+#   - sso-db-app          (généré par CNPG)            → user/pass PostgreSQL
+#
+# ⚠ Image : `ghcr.io/hseb72/rental-platform/keycloak:26.0` est encore construite
+# par le dépôt rental-platform (workflow « Build Keycloak Image », k8s/sso/
+# Dockerfile). Couplage résiduel à lever : déplacer le build ici (cf. system/
+# README.md). L'image est immuable/publiée → le DÉPLOIEMENT, lui, est désormais
+# indépendant de xpms.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: sso
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  # Défaut 600s : trop court quand un changement de KC_FEATURES déclenche une
+  # ré-augmentation. Le Deployment déclarait « progress deadline exceeded »
+  # alors que le build était encore en cours (le pod, lui, continuait).
+  progressDeadlineSeconds: 1800
+  strategy:
+    type: Recreate # une base, pas de rolling à 2 replicas au 1er jet
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      # Le paquet GHCR est privé : sur ce cluster l'auth se fait au niveau du
+      # nœud (registries.yaml), ce imagePullSecrets est toléré même sans secret.
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: keycloak
+          # Image pré-augmentée (rental-platform/k8s/sso/Dockerfile, publiée par
+          # le workflow « Build Keycloak Image ») : plus aucun build au démarrage.
+          image: ghcr.io/hseb72/rental-platform/keycloak:26.0
+          imagePullPolicy: Always
+          args: ["start", "--optimized"]
+          env:
+            # --- Base de données ---
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://sso-db-rw.sso.svc:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sso-db-app
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sso-db-app
+                  key: password
+            # --- Réseau / proxy (TLS terminé à l'ingress) ---
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HOSTNAME
+              value: https://sso.crealcs.com
+            # --- Options de BUILD : gravées dans l'image, à garder identiques ---
+            # Keycloak refuse de démarrer en --optimized si l'une d'elles diverge
+            # de ce que le Dockerfile a construit.
+            # `organization` : SSO par tenant (1 Organization par tenant, IdP
+            # brokerisé par org, home-realm discovery par domaine email).
+            # NB : le nom de la feature est au SINGULIER (`organization`) ;
+            # `organizations` fait échouer le démarrage (feature inconnue).
+            - name: KC_FEATURES
+              value: organization
+            # --- Observabilité (repris par la stack VictoriaMetrics) ---
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            # --- Compte admin bootstrap (Keycloak >= 26) ---
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          # L'image étant pré-augmentée, le démarrage prend quelques secondes.
+          # Le startupProbe suspend liveness/readiness le temps de l'amorçage et
+          # d'une éventuelle migration de schéma.
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            periodSeconds: 10
+            # 5 min : large pour un démarrage optimisé, tout en couvrant une
+            # migration de schéma après montée de version.
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              # Plus de build au démarrage : 1 cœur suffit largement au service.
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: sso
+  labels:
+    app: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

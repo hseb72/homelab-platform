@@ -1,0 +1,37 @@
+# Application Argo CD du SSO (Keycloak) — désormais possédée par homelab-platform,
+# plus par l'install xpms. C'est ce qui lève le couplage « SSO ko faute de mise à
+# jour de xpms » : le SSO se déploie et se met à jour tout seul, en GitOps.
+#
+# Source : les manifestes bruts de system/sso (Cluster CNPG, Keycloak, Ingress).
+# Le README (non-YAML) est ignoré par Argo.
+#
+# Bootstrap (une fois) : kubectl apply -f system/project.yaml puis
+#                        kubectl apply -f system/sso-application.yaml
+# Prérequis dans le ns sso : secret `keycloak-admin` (cf. system/sso/README.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sso
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: system
+  source:
+    repoURL: https://github.com/hseb72/homelab-platform.git
+    targetRevision: main
+    path: system/sso
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sso
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }

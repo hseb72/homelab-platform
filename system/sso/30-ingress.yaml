@@ -1,0 +1,49 @@
+# Ingress + certificats TLS pour le SSO, via l'edge du socle (classe `nginx`,
+# cert-manager HTTP-01).
+#
+# Deux hôtes, deux certificats indépendants :
+#   - sso.crealcs.com         : URL publique CANONIQUE (= KC_HOSTNAME, issuer
+#                               OIDC codé dans tous les clients). NE PAS renommer.
+#   - sso.system.crealcs.com  : alias d'admin/interne, schéma `*.system.crealcs.com`
+#                               du tooling de plateforme (remplace l'ancien
+#                               sso.xpms.crealcs.com). Requiert un DNS dédié
+#                               (ou le wildcard *.system.crealcs.com).
+# (certs séparés → si l'un échoue l'ACME, l'autre reste valide.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: sso
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: keycloak-crealcs-tls
+      hosts:
+        - sso.crealcs.com
+    - secretName: keycloak-system-tls
+      hosts:
+        - sso.system.crealcs.com
+  rules:
+    - host: sso.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+    - host: sso.system.crealcs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080

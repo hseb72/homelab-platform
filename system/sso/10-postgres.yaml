@@ -1,0 +1,37 @@
+# Base PostgreSQL dédiée à Keycloak (opérateur CloudNativePG du socle, ns
+# cnpg-system). 1 instance suffit pour le SSO ; ressources basses (hôte serré).
+#
+# CNPG crée automatiquement le secret `sso-db-app` (clés: username, password,
+# dbname, host, uri, jdbc-uri…) pour l'utilisateur applicatif `keycloak`.
+# Keycloak lit username/password depuis ce secret (cf. 20-keycloak.yaml).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sso-db
+  namespace: sso
+spec:
+  instances: 1
+
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+      # secret non spécifié → CNPG génère `sso-db-app` avec un mot de passe aléatoire.
+
+  storage:
+    size: 2Gi
+    # Décommenter pour forcer la storageClass (sinon défaut du cluster, ex k3s local-path) :
+    # storageClass: local-path
+
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "128MB"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
