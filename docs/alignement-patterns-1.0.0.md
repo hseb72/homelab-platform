@@ -88,6 +88,10 @@ du modèle. On le réaligne.
                     └─────────────────────────────────────────────────────────────┘
  api-<app> ─► postgres-rw.postgres | minio.minio | redis.redis   +   vault (secrets)
             (CNPG)                  (seau par app)  (préfixe par app)  (creds dynamiques)
+
+ ns: postgres ─► minio.minio   ◄─ UNIQUEMENT pour la SAUVEGARDE CNPG (barman →
+                 (seau postgres-backups)   seau postgres-backups) ; PAS un accès
+                                           applicatif. Cf. note ci-dessous.
 ```
 
 Coordonnées que les applications visent (défauts des patterns — **aucune
@@ -101,6 +105,18 @@ surcharge sauf l'edge**) :
 | Vault | `ns: vault` | `platform-patterns.io/vault-client` |
 | Kong (data-plane) | `ns: kong` | `platform-patterns.io/kong-client` (BFF) |
 | Edge ingress | `ns: ingress` | — (`webIngress.controllerNamespace: ingress`) |
+
+> **Arête hors-modèle : `postgres → minio` pour la sauvegarde.** Quand la
+> sauvegarde CNPG (`postgres.backup.enabled`) vise le MinIO mutualisé, le pod
+> PostgreSQL écrit dans le seau `postgres-backups` — le ns `postgres` doit donc
+> être admis par la NetworkPolicy du MinIO. Ce n'est **pas** un accès applicatif :
+> `postgres` n'est pas « locataire » du MinIO, il y dépose ses sauvegardes. Le
+> contournement actuel réutilise l'étiquette générique
+> `platform-patterns.io/minio-client` sur le ns `postgres`, ce qui est imprécis
+> (il ouvre tout MinIO, pas seulement le backup). Le correctif propre est amont
+> (platform-patterns#23) : que le chart exprime cette arête comme **spécifique à
+> la sauvegarde**. En attendant, étiquetage hors-bande documenté dans
+> `platform/README.md` (§Sauvegarde CNPG, étape 2b).
 
 ## 5. Plan de mise à jour du socle
 
