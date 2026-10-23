@@ -19,38 +19,27 @@ La fusion d'une PR reste le seul point de passage vers le cluster.
 
 | # | Agent | Déclencheur | Le script | L'IA | Quota estimé |
 |---|---|---|---|---|---|
-| 1 | **Guichet d'onboarding** | issue « Nouveau locataire » | [`add-tenant.py`](scripts/add-tenant.py) via [`tenant-onboarding.yml`](.github/workflows/tenant-onboarding.yml) : values, hôte d'API, kit côté appli, PR | **repli seulement**, si le script refuse : explique le refus (Sonnet, 6 tours) | ~0 |
-| 2 | **Clés et vérification** | après fusion, par l'admin | [`tenant-keys.sh`](scripts/tenant-keys.sh) (clés, synchro Argo, SealedSecrets) puis [`verify-tenant.sh`](scripts/verify-tenant.sh) (checklist + cloisonnement) | aucune | 0 |
 | 4 | **Épreuve de restauration** | CronJob, dimanche 4 h 40 | [`restore-check`](database/templates/backup/restore-check-cronjob.yaml) : dernier dump rejoué dans un PostgreSQL jetable, comparé à la prod | aucune ; l'échec du Job **est** l'alerte ([règles vmalert](database/README.md#épreuve-automatique-chaque-dimanche)) | 0 |
 | 5 | **Veille de versions** | Renovate, lundi matin | [`renovate.json`](renovate.json) : PR de montée pour chaque tag épinglé | **avis** sur chaque PR Renovate : ce qui touche CE dépôt, verdict (Sonnet, 8 tours, [`version-review.yml`](.github/workflows/version-review.yml)) | ~0,3 session/PR |
 | 7 | **Dérive** | à la main ou cron du poste admin, hebdo | [`drift.sh`](scripts/drift.sh) : valeurs et version des moteurs CLI-Helm, manifestes bruts, releases non décrites | aucune | 0 |
 | 3 | **Dépouillement du WAF** | à la main, quotidien pendant la phase DetectionOnly | [`waf-digest.py`](scripts/waf-digest.py) : alertes condensées, sans données personnelles | **`--ask`** : tri faux positifs / suspects, exclusions au format de WAF.md (Sonnet, 3 tours) | ~0,1 session/jour, 1 à 2 semaines |
 
+> **Guichet d'onboarding retiré (phase 5).** Les applications ne sont plus des
+> « locataires » déclarés ici : chacune consomme le socle `platform-patterns`
+> via `charts/app` depuis SON dépôt (une `Application` Argo). Les agents 1
+> (guichet) et 2 (clés/vérification) et leurs scripts/workflows n'existent plus.
+
 ## Mise en service (une fois)
 
-1. **Étiquette** : `gh label create nouveau-locataire` (le formulaire la pose).
-2. **Settings → Actions → General** : cocher *Allow GitHub Actions to create and
-   approve pull requests* (le guichet ouvre la PR).
-3. **Secret `CLAUDE_CODE_OAUTH_TOKEN`** : `claude setup-token` sur ton poste,
-   puis `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Sans lui, le guichet marche
-   (le repli est sauté et le refus est posté tel quel) ; seul l'avis de version
-   en dépend.
-4. **App Claude** sur le dépôt (`/install-github-app` dans Claude Code) : elle
+1. **Secret `CLAUDE_CODE_OAUTH_TOKEN`** : `claude setup-token` sur ton poste,
+   puis `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Requis par l'avis de version
+   (le seul agent qui appelle Claude).
+2. **App Claude** sur le dépôt (`/install-github-app` dans Claude Code) : elle
    fournit au workflow le jeton qui poste les commentaires.
-5. **Renovate** : installer l'app *Mend Renovate* sur le dépôt. Sa PR
+3. **Renovate** : installer l'app *Mend Renovate* sur le dépôt. Sa PR
    d'accueil valide `renovate.json` — à relire avant de la fusionner.
-6. **Alertes** : poser les deux règles vmalert de l'épreuve de restauration
+4. **Alertes** : poser les deux règles vmalert de l'épreuve de restauration
    (database/README.md §4). Sans elles, l'épreuve échoue en silence.
-
-## Le parcours d'un nouveau locataire
-
-```
-issue « Nouveau locataire »  ──►  PR (script, 0 quota)  ──►  revue, fusion
-                                                              │
-     scripts/tenant-keys.sh <nom> --database … --out ./sealed ◄┘   (poste admin)
-     scripts/verify-tenant.sh <nom>                                 (tout vert ?)
-     kit + SealedSecrets → dépôt de l'application
-```
 
 ## Pas encore en place
 
