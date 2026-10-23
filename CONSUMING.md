@@ -28,7 +28,6 @@ rend le partage tenable.
 |---|---|---|---|---|---|
 | **Stockage objet** | MinIO | entrée `tenants` dans [`object-store/values.yaml`](object-store/) + clé dans `object-store-tenant-keys` | `minio.object-store.svc.cluster.local:9000` | politique bornée aux seuls seaux du locataire | compte = `access-key`, clé = `secret-key` |
 | **Base de données** | PostgreSQL | entrée `tenants` dans [`database/values.yaml`](database/) + mot de passe dans `database-tenant-keys` | `postgres.database.svc.cluster.local:5432` | `CONNECT` réservé au propriétaire de la base | se connecter avec `user=<locataire>`, `dbname=<base>` |
-| **Cache** | Redis | entrée `tenants` dans [`cache/values.yaml`](cache/) + mot de passe dans `cache-tenant-keys` | `redis.cache.svc.cluster.local:6379` | ACL bornée au préfixe `<locataire>:*` | **toutes les clés préfixées `<locataire>:`** |
 | **Exposition d'API** | Kong + ingress | hôte dans [`gateway/10-ingress-api-hosts.yaml`](gateway/) + Ingress classe `kong` chez soi | `kong-proxy.gateway.svc.cluster.local` (interne) | classe `kong` dédiée, routes par namespace | préserver l'en-tête `Host` |
 
 Le détail de chaque service — et le « pourquoi » de ses choix — est dans son

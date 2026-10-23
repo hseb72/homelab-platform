@@ -30,7 +30,6 @@ sous sa forme la plus simple : GitOps plutôt qu'une interface, pour l'instant.
 |---|---|---|
 | [`object-store/`](object-store/) — MinIO mutualisé (stockage objet) | `object-store` | à installer |
 | [`database/`](database/) — PostgreSQL mutualisé (données) | `database` | à installer |
-| [`cache/`](cache/) — Redis mutualisé (cache) | `cache` | à installer |
 
 **Moteurs d'infra — installés en CLI-Helm, hors Argo.** Le frontal et la
 gateway portent ce dont Argo lui-même dépend : ils se tiennent volontairement en
@@ -52,8 +51,8 @@ fait sans interruption de service.
 - **[`DEPLOY.md`](DEPLOY.md)** — installer le socle, dans l'ordre (projet Argo CD
   partagé → tags d'image → secrets scellés → Applications).
 - **[`CONSUMING.md`](CONSUMING.md)** — le protocole de consommation : comment une
-  application obtient et câble ses ressources (seau + compte, base + rôle, cache +
-  ACL, exposition d'API). Gabarits copiables dans
+  application obtient et câble ses ressources (seau + compte, base + rôle,
+  exposition d'API). Gabarits copiables dans
   [`examples/consumer-app/`](examples/consumer-app/).
 
 ## Évoluer
