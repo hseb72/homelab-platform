@@ -106,8 +106,14 @@ provision:
 #
 # `name` est le rôle de connexion ; `database` la base dont il est propriétaire.
 tenants:
-  - name: findout
-    database: findout
+  # findout — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG (ns
+  # `postgres`). Base maison `findout` conservée en secours ; clé `findout` de
+  # `database-tenant-keys` retirable à l'abandon.
+  #
+  # ⟶ Plus AUCUN locataire actif : les cinq applications (findout, mtgwars,
+  # treasurehunters, wh4chars, prolearning) sont passées sur CNPG. Ce chart
+  # `database/` maison ne sert plus qu'à conserver les bases de secours ; il
+  # sera retiré en phase 5.
   # Treasure Hunters — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG
   # (ns `postgres`). Base maison `treasurehunters` conservée en secours ; clé
   # `treasurehunters` de `database-tenant-keys` retirable à l'abandon.
