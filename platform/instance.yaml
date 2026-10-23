@@ -32,10 +32,27 @@ postgres:
   # bases/rôles (le superutilisateur CNPG est dans un Secret géré par CNPG).
   enableSuperuserAccess: true
   monitoring: true                # repris par VictoriaMetrics
-  # Sauvegarde/PITR CNPG vers le MinIO mutualisé — À ACTIVER après la phase 2
-  # (remplace la sauvegarde maison). Demande un Secret S3 hors chart.
+  # Sauvegarde/PITR CNPG (barman) vers le MinIO mutualisé (ns `minio`). Remplace
+  # la sauvegarde maison du chart `database/` — prérequis à son retrait (phase 5).
+  #
+  # Hors chart (une fois, cf. README §Sauvegarde CNPG) :
+  #   - un seau `postgres-backups` sur le MinIO mutualisé ;
+  #   - un Secret `postgres-backup-s3` dans le ns `postgres`, clés `access-key`
+  #     et `secret-key` d'un utilisateur MinIO ayant accès à ce seau (scellé).
+  # Après activation : déclencher un Backup à la demande et vérifier qu'il arrive
+  # dans le seau AVANT de retirer la sauvegarde maison.
   backup:
-    enabled: false
+    enabled: true
+    # Dimanche 3 h 05 (décalé de l'heure ronde) : base backup hebdomadaire ;
+    # l'archivage WAL continu assure le PITR entre deux.
+    schedule: "5 3 * * 0"
+    retentionPolicy: 30d
+    destinationPath: s3://postgres-backups/
+    endpointURL: http://minio.minio.svc.cluster.local:9000
+    s3Credentials:
+      secretName: postgres-backup-s3
+      accessKeyIdKey: access-key
+      secretAccessKeyKey: secret-key
 
 # ── MinIO — ns `minio` ───────────────────────────────────────────────────────
 minio:
