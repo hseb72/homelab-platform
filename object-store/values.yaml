@@ -74,11 +74,9 @@ tenants:
   # maison ne provisionne plus son seau. Le seau maison `treasurehunters` subsiste
   # comme filet de secours jusqu'à son abandon ; sa clé dans
   # `object-store-tenant-keys` peut être retirée en même temps.
-  # Warhammer JdR, Personnages — https://github.com/hseb72/wh4chars (ns `wh4chars`) :
-  # portraits des personnages (portraits/<id>/…), supprimés avec le personnage.
-  - name: wh4chars
-    buckets:
-      - wh4chars
+  # Warhammer JdR, Personnages — MIGRÉ (phase 4) vers le MinIO mutualisé
+  # platform-patterns (ns `minio`). Seau maison `wh4chars` conservé en secours ;
+  # clé `wh4chars` de `object-store-tenant-keys` retirable à l'abandon.
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   buckets: [rental, rental-backups]

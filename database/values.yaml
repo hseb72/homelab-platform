@@ -116,9 +116,9 @@ tenants:
   # maison ne le provisionne plus. La base maison `mtgwars` subsiste comme filet
   # de secours jusqu'à ce qu'elle soit abandonnée ; la clé `mtgwars` de
   # `database-tenant-keys` peut être retirée en même temps.
-  # Warhammer JdR, Personnages — https://github.com/hseb72/wh4chars (ns `wh4chars`)
-  - name: wh4chars
-    database: wh4chars
+  # Warhammer JdR, Personnages — MIGRÉ (phase 4) vers le PostgreSQL mutualisé
+  # CloudNativePG (ns `postgres`). Base maison `wh4chars` conservée en secours ;
+  # clé `wh4chars` de `database-tenant-keys` retirable à l'abandon.
   # 3S - Pro Learning — portail de formation (production) — https://github.com/hseb72/prolearning (ns `prolearning`)
   - name: prolearning
     database: prolearning
