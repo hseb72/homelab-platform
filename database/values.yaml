@@ -111,9 +111,11 @@ tenants:
   # Treasure Hunters — https://github.com/hseb72/treasurehunters (ns `treasurehunters`)
   - name: treasurehunters
     database: treasurehunters
-  # MTG Wars — https://github.com/hseb72/mtgwars (ns `mtgwars`)
-  - name: mtgwars
-    database: mtgwars
+  # MTG Wars — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG
+  # (ns `postgres`, chart `app` 1.0.0 en `shared`). Ne figure plus ici : le socle
+  # maison ne le provisionne plus. La base maison `mtgwars` subsiste comme filet
+  # de secours jusqu'à ce qu'elle soit abandonnée ; la clé `mtgwars` de
+  # `database-tenant-keys` peut être retirée en même temps.
   # Warhammer JdR, Personnages — https://github.com/hseb72/wh4chars (ns `wh4chars`)
   - name: wh4chars
     database: wh4chars
