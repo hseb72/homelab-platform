@@ -6,7 +6,7 @@ les **séquencer**.
 
 ## Deux paliers, deux modes
 
-- **Backends applicatifs** (`object-store`, `database`, `cache`) — pilotés par
+- **Backends applicatifs** (`object-store`, `database`) — pilotés par
   **Argo CD** depuis Git. C'est l'objet de ce runbook.
 - **Moteurs d'infra** (`platform-ingress`, `gateway`) — installés en **CLI-Helm**
   (`helm upgrade --install`), hors Argo. Déjà en service ; commandes dans leur
@@ -34,7 +34,7 @@ kubectl apply -f object-store/argocd/project.yaml
 > ce fichier — sinon le sync échoue sur « namespace … is not permitted in
 > project », sans que la santé de l'app bouge.
 
-## 2. Chaque backend (répéter pour object-store, database, cache)
+## 2. Chaque backend (répéter pour object-store, database)
 
 L'ordre entre les trois est libre ; ils sont indépendants. Pour chacun :
 
@@ -67,15 +67,14 @@ kubectl -n database create secret generic database-tenant-keys \
 # puis kubeseal sur chacun.
 ```
 
-(object-store : `minio-root` + `object-store-tenant-keys` ; cache : `cache-admin`
-+ `cache-tenant-keys`. Détail et clés exactes en §1 de chaque README.)
+(object-store : `minio-root` + `object-store-tenant-keys`. Détail et clés exactes
+en §1 de chaque README.)
 
 **c. Appliquer l'Application** :
 
 ```bash
 kubectl apply -f object-store/argocd/application.yaml
 kubectl apply -f database/argocd/application.yaml
-kubectl apply -f cache/argocd/application.yaml
 kubectl -n argocd get applications -w
 ```
 
@@ -88,7 +87,6 @@ voir refuser une ressource voisine). Les commandes sont en §4 de chaque README.
 ```bash
 kubectl -n object-store logs job/provision-1   # provisionnement des locataires
 kubectl -n database     logs job/provision-1
-kubectl -n cache        logs job/provision-1
 ```
 
 ## Ordre de bascule (récapitulatif)
