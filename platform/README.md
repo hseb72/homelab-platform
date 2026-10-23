@@ -45,6 +45,12 @@ retirer celui-ci (phase 5). `postgres.backup.enabled: true` dans
 kubectl -n postgres create secret generic postgres-backup-s3 \
   --from-literal=access-key=postgres-backup --from-literal=secret-key='<clé>' \
   --dry-run=client -o yaml | kubeseal --controller-namespace kube-system --format yaml > sealed/postgres-backup-s3.yaml
+# 2b. ⚠ Le ns `postgres` doit devenir CLIENT du MinIO mutualisé pour y écrire :
+#     sans ce label, la NetworkPolicy du MinIO refuse la connexion et le Backup
+#     échoue (« Could not connect to the endpoint URL »). Le chart `platform` ne
+#     le pose pas (le ns postgres n'est pas un client minio dans son modèle) —
+#     cf. issue platform-patterns. À poser à la main :
+kubectl label ns postgres platform-patterns.io/minio-client=true --overwrite
 # 3. Après synchro Argo : déclencher un Backup à la demande et vérifier qu'il
 #    arrive dans le seau.
 kubectl -n postgres apply -f - <<'YAML'
