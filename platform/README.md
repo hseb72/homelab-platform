@@ -26,8 +26,37 @@ se réconcilie.
 ## Secrets attendus (hors chart, scellés)
 
 - `platform-minio` (ns `minio`) — `root-user` / `root-password` de MinIO.
+- `postgres-backup-s3` (ns `postgres`) — `access-key` / `secret-key` d'un
+  utilisateur MinIO ayant accès au seau `postgres-backups` (sauvegarde CNPG).
 - Par application, à sa migration (ns `api-<app>`) : `<app>-pg-provisioner`,
   `<app>-minio-provisioner`, et `<app>-vault-provisioner` si chemin dynamique.
+
+## Sauvegarde CNPG (hors-bande, une fois ; prérequis au retrait de `database/`)
+
+La sauvegarde/PITR barman de CNPG écrit dans le MinIO mutualisé. Elle remplace
+la sauvegarde du chart maison `database/` — à activer et **vérifier avant** de
+retirer celui-ci (phase 5). `postgres.backup.enabled: true` dans
+`instance.yaml`. Une fois :
+
+```bash
+# 1. Seau + utilisateur MinIO dédié à la sauvegarde (via un pod mc, cf. runbook
+#    de bascule) : seau `postgres-backups`, user `postgres-backup` + policy.
+# 2. Secret des clés S3 dans le ns postgres (scellé) :
+kubectl -n postgres create secret generic postgres-backup-s3 \
+  --from-literal=access-key=postgres-backup --from-literal=secret-key='<clé>' \
+  --dry-run=client -o yaml | kubeseal --controller-namespace kube-system --format yaml > sealed/postgres-backup-s3.yaml
+# 3. Après synchro Argo : déclencher un Backup à la demande et vérifier qu'il
+#    arrive dans le seau.
+kubectl -n postgres apply -f - <<'YAML'
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata: { name: verif-backup, namespace: postgres }
+spec: { cluster: { name: postgres } }
+YAML
+kubectl -n postgres get backup verif-backup -w   # phase → completed
+```
+
+Tant que ce Backup n'est pas `completed`, ne PAS retirer la sauvegarde maison.
 
 ## Bootstrap Vault (hors-bande, une fois)
 
