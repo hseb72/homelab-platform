@@ -65,10 +65,10 @@ fait sans interruption de service.
 
 ## Automatiser
 
-- **[`AGENTS.md`](AGENTS.md)** — le guichet d'onboarding (issue → PR), les clés
-  et la vérification d'un locataire, l'épreuve de restauration hebdomadaire, la
+- **[`AGENTS.md`](AGENTS.md)** — l'épreuve de restauration hebdomadaire, la
   veille de versions, la dérive des moteurs CLI-Helm, le dépouillement du WAF.
-  Le script d'abord ; l'IA en exception, plafonnée.
+  Le script d'abord ; l'IA en exception, plafonnée. (Le guichet d'onboarding a
+  été retiré en phase 5 : les apps consomment le socle via `charts/app`.)
 
 ## Principes
 
