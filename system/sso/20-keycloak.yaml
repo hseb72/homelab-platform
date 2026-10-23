@@ -6,11 +6,9 @@
 #   - keycloak-admin      (clés: username, password)  → compte admin bootstrap
 #   - sso-db-app          (généré par CNPG)            → user/pass PostgreSQL
 #
-# ⚠ Image : `ghcr.io/hseb72/rental-platform/keycloak:26.0` est encore construite
-# par le dépôt rental-platform (workflow « Build Keycloak Image », k8s/sso/
-# Dockerfile). Couplage résiduel à lever : déplacer le build ici (cf. system/
-# README.md). L'image est immuable/publiée → le DÉPLOIEMENT, lui, est désormais
-# indépendant de xpms.
+# Image : `ghcr.io/hseb72/homelab-platform/keycloak:26.0`, pré-augmentée et
+# construite DANS CE DÉPÔT (system/sso/Dockerfile + .github/workflows/
+# build-keycloak.yml). Plus aucune dépendance au dépôt rental-platform.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,9 +38,9 @@ spec:
         - name: ghcr-pull
       containers:
         - name: keycloak
-          # Image pré-augmentée (rental-platform/k8s/sso/Dockerfile, publiée par
-          # le workflow « Build Keycloak Image ») : plus aucun build au démarrage.
-          image: ghcr.io/hseb72/rental-platform/keycloak:26.0
+          # Image pré-augmentée (system/sso/Dockerfile, publiée par le workflow
+          # « Build Keycloak Image » de ce dépôt) : plus aucun build au démarrage.
+          image: ghcr.io/hseb72/homelab-platform/keycloak:26.0
           imagePullPolicy: Always
           args: ["start", "--optimized"]
           env:
