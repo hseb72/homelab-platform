@@ -108,9 +108,9 @@ provision:
 tenants:
   - name: findout
     database: findout
-  # Treasure Hunters — https://github.com/hseb72/treasurehunters (ns `treasurehunters`)
-  - name: treasurehunters
-    database: treasurehunters
+  # Treasure Hunters — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG
+  # (ns `postgres`). Base maison `treasurehunters` conservée en secours ; clé
+  # `treasurehunters` de `database-tenant-keys` retirable à l'abandon.
   # MTG Wars — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG
   # (ns `postgres`, chart `app` 1.0.0 en `shared`). Ne figure plus ici : le socle
   # maison ne le provisionne plus. La base maison `mtgwars` subsiste comme filet
