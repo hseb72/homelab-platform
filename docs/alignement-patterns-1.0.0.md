@@ -17,8 +17,8 @@ des secrets statiques scellés, un guichet d'onboarding.
 
 `platform-patterns` 1.0.0 fournit désormais une implémentation **canonique** du
 même rôle : un chart `platform` (app-of-apps) qui *livre et maintient* les
-outils, et un chart **unique** `app` que chaque application consomme en
-`mode: shared`. Le dépôt des patterns dit explicitement qu'une instance se
+outils, et un chart **unique** `app` que chaque application consomme — le plus souvent
+en `mode: shared`, xpms en `mode: dedicated` (cf. §2). Le dépôt des patterns dit explicitement qu'une instance se
 déploie « depuis un repo d'ops, à partir de `charts/platform` **ou par tout
 autre moyen qui honore le contrat** ».
 
@@ -53,6 +53,15 @@ du modèle. On le réaligne.
   (chart `app`) qui créent *sa* base / *son* seau avec un **credential d'admin
   émis par le socle** (référencé par nom). La liste `tenants` du socle et le
   guichet disparaissent : l'app déclare tout chez elle.
+- **xpms (rental) reste en `mode: dedicated`, pas `shared`.** Contrairement
+  aux autres apps, xpms garde ses propres moteurs de données (PostgreSQL CNPG,
+  Redis, MinIO) **embarqués dans sa release**, dans son namespace. Il ne
+  consomme pas les datastores mutualisés (`postgres`/`minio`/`redis`) et n'a
+  donc **ni provisioning vers le partagé, ni `pg_dump`/`mc mirror` vers le
+  socle**. Le reste du contrat (edge `ingress`/`kong`, labels, Vault) lui
+  s'applique normalement. Toute phase qui parle de « migration vers le
+  mutualisé » ou de « retrait des datastores » exclut xpms : ses données ne
+  bougent pas.
 
 ## 3. Écarts (socle actuel → contrat 1.0.0)
 
@@ -133,13 +142,27 @@ sans toucher à la production.
 Voir §6. Ordre conseillé : un cobaye (treasurehunters ou mtgwars), puis
 prolearning (×3), wh4chars, findout, enfin rental.
 
+> **rental (xpms) = `mode: dedicated`** (cf. §2) : il suit §6 **sans** les
+> étapes de provisioning et de migration de données vers le mutualisé (6.a et
+> 6.c). Ses datastores restent embarqués dans sa release ; seuls l'edge, les
+> labels et Vault s'alignent. Le mettre en dernier reste conseillé, mais c'est
+> la migration la plus légère côté données (rien à déplacer).
+
 ### Phase 5 — Retrait du socle maison
 - Supprimer `object-store/`, `database/`, `cache/`, `gateway/`,
   `platform-ingress/`, le guichet (`scripts/`, workflows), la liste `tenants`.
+  > Ces charts maison sont les **datastores mutualisés du socle** et le
+  > tooling d'onboarding. Les retirer suppose que **toutes les apps `shared`**
+  > ont migré leurs données (phase 4). **xpms (dedicated) n'y stocke rien** :
+  > ses moteurs vivent dans sa propre release, leur suppression ici ne le
+  > concerne pas et ne doit pas attendre après lui.
 - Réécrire `README`, `CONSUMING.md`, `DEPLOY.md`, `AGENTS.md` autour de
   `charts/platform` (ops) et `charts/app` (apps). Archiver l'ancien.
 
 ## 6. Procédure de migration d'une application
+
+Procédure du **pattern `shared`** (le cas par défaut). **xpms (rental) est en
+`dedicated`** : voir l'encart en fin de section pour ce qui change.
 
 Pour une application `monapp` (release → namespaces `ui-monapp` / `api-monapp`).
 
@@ -196,6 +219,19 @@ cloisonnement.
 **Pourquoi c'est simple** : une `Application`, une surcharge (`ingress`), des
 Jobs de provisionnement qui créent la tranche tout seuls. L'app ne modifie plus
 jamais le repo de socle.
+
+> **Variante `dedicated` — xpms (rental).** L'`Application` pointe `charts/app`
+> en `mode: dedicated` : le chart monte les datastores (CNPG, Redis, MinIO)
+> **dans la release de l'app**, pas de consommation du mutualisé. Donc :
+> - **6.a (credentials de provisioning du socle)** → *sans objet* : rien à
+>   émettre côté socle, l'app gère ses propres secrets de données.
+> - **6.b** → `mode: dedicated` ; les clés `provisioning` et les `S3_ENDPOINT`/
+>   `REDIS_ADDR` pointant le mutualisé n'ont pas lieu d'être (le chart câble les
+>   services internes de la release). Seul l'edge (`webIngress.controllerNamespace:
+>   ingress`, `kongIngress`) reste à surcharger, comme pour `shared`.
+> - **6.c (migration de données)** → *sans objet* : les données **restent en
+>   place**, on ne `pg_dump`/`mc mirror` rien vers le socle.
+> - **6.d** → identique (bascule de l'edge, vérif UI + `/api`, cloisonnement).
 
 ## 7. Ce qui est retiré / conservé
 
