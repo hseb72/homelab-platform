@@ -119,15 +119,12 @@ tenants:
   # Warhammer JdR, Personnages — MIGRÉ (phase 4) vers le PostgreSQL mutualisé
   # CloudNativePG (ns `postgres`). Base maison `wh4chars` conservée en secours ;
   # clé `wh4chars` de `database-tenant-keys` retirable à l'abandon.
-  # 3S - Pro Learning — portail de formation (production) — https://github.com/hseb72/prolearning (ns `prolearning`)
-  - name: prolearning
-    database: prolearning
-  # 3S - Pro Learning — espace démonstration — https://github.com/hseb72/prolearning (ns `prolearning`)
-  - name: prolearning-demo
-    database: prolearning_demo
-  # 3S - Pro Learning — espace évaluation — https://github.com/hseb72/prolearning (ns `prolearning`)
-  - name: prolearning-eval
-    database: prolearning_eval
+  # 3S - Pro Learning — MIGRÉ (phase 4) vers le PostgreSQL mutualisé CloudNativePG
+  # (ns `postgres`). Ses TROIS bases (prolearning, prolearning_demo,
+  # prolearning_eval) y vivent désormais ; le socle maison ne les provisionne
+  # plus. Bases maison conservées en secours ; clés `prolearning`,
+  # `prolearning-demo`, `prolearning-eval` de `database-tenant-keys` retirables
+  # à l'abandon.
   # Exemples à décommenter au fur et à mesure des reprises :
   # - name: rental
   #   database: rental
