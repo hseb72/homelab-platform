@@ -6,8 +6,10 @@ les **séquencer**.
 
 ## Deux paliers, deux modes
 
-- **Backends applicatifs** (`object-store`, `database`) — pilotés par
-  **Argo CD** depuis Git. C'est l'objet de ce runbook.
+- **Backends applicatifs** (`database`) — pilotés par
+  **Argo CD** depuis Git. C'est l'objet de ce runbook. (Le stockage objet
+  maison `object-store` a été retiré en phase 5 ; la base `database` est la
+  dernière brique de socle maison, elle-même en cours de retrait.)
 - **Moteurs d'infra** (`platform-ingress`, `gateway`) — installés en **CLI-Helm**
   (`helm upgrade --install`), hors Argo. Déjà en service ; commandes dans leur
   `README.md`. Rien à refaire pour un déploiement des backends.
@@ -22,11 +24,11 @@ les **séquencer**.
 
 ## 1. Le projet Argo CD partagé (une fois)
 
-Un seul `AppProject`, `homelab-platform`, gouverne les trois namespaces. Il est
-livré avec `object-store` et **doit être appliqué avant** toute Application.
+Un seul `AppProject`, `homelab-platform`, gouverne le namespace du socle maison
+restant (`database`). Il **doit être appliqué avant** l'Application.
 
 ```bash
-kubectl apply -f object-store/argocd/project.yaml
+kubectl apply -f database/argocd/project.yaml
 ```
 
 > Rappel Argo : l'`AppProject` n'est pas synchronisé par les Applications.
@@ -34,9 +36,9 @@ kubectl apply -f object-store/argocd/project.yaml
 > ce fichier — sinon le sync échoue sur « namespace … is not permitted in
 > project », sans que la santé de l'app bouge.
 
-## 2. Chaque backend (répéter pour object-store, database)
+## 2. Le backend `database`
 
-L'ordre entre les trois est libre ; ils sont indépendants. Pour chacun :
+Il ne reste qu'un backend de socle maison. Pour lui :
 
 **a. Renseigner le tag d'image** dans son `values-prod.yaml`. Le chart **refuse
 de se rendre** tant qu'il est vide (garde-fou volontaire). La commande exacte
@@ -67,13 +69,11 @@ kubectl -n database create secret generic database-tenant-keys \
 # puis kubeseal sur chacun.
 ```
 
-(object-store : `minio-root` + `object-store-tenant-keys`. Détail et clés exactes
-en §1 de chaque README.)
+(Détail et clés exactes en §1 du README du composant.)
 
 **c. Appliquer l'Application** :
 
 ```bash
-kubectl apply -f object-store/argocd/application.yaml
 kubectl apply -f database/argocd/application.yaml
 kubectl -n argocd get applications -w
 ```
@@ -85,14 +85,13 @@ c'est la seule vérification qui compte vraiment (un compte de locataire doit se
 voir refuser une ressource voisine). Les commandes sont en §4 de chaque README.
 
 ```bash
-kubectl -n object-store logs job/provision-1   # provisionnement des locataires
-kubectl -n database     logs job/provision-1
+kubectl -n database logs job/provision-1   # provisionnement des locataires
 ```
 
 ## Ordre de bascule (récapitulatif)
 
-1. `object-store/argocd/project.yaml` (le projet partagé) — **d'abord**.
-2. Pour chaque backend : tag d'image → secrets scellés → `application.yaml`.
+1. `database/argocd/project.yaml` (le projet partagé) — **d'abord**.
+2. Backend `database` : tag d'image → secrets scellés → `application.yaml`.
 3. Vérifier synchro + cloisonnement.
 
 Ajouter une application ensuite ne touche presque pas à ce dépôt : une entrée

@@ -18,8 +18,6 @@ jobs:
         include:
           # Chaque composant déclare les tags d'image que la CI doit fournir
           # pour rendre le chart : ils sont volontairement vides dans le dépôt.
-          - chart: object-store
-            setargs: --set minio.image.tag=CI --set provision.image.tag=CI
           - chart: database
             setargs: --set postgres.image.tag=CI --set backup.mcImage.tag=CI
     steps:
