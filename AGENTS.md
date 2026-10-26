@@ -19,8 +19,8 @@ La fusion d'une PR reste le seul point de passage vers le cluster.
 
 | # | Agent | Déclencheur | Le script | L'IA | Quota estimé |
 |---|---|---|---|---|---|
-| 5 | **Veille de versions** | Renovate, lundi matin | [`renovate.json`](renovate.json) : PR de montée pour chaque tag épinglé | **avis** sur chaque PR Renovate : ce qui touche CE dépôt, verdict (Sonnet, 8 tours, [`version-review.yml`](.github/workflows/version-review.yml)) | ~0,3 session/PR |
-| 7 | **Dérive** | à la main ou cron du poste admin, hebdo | [`drift.sh`](scripts/drift.sh) : valeurs et version des moteurs CLI-Helm, manifestes bruts, releases non décrites | aucune | 0 |
+| 5 | **Veille de versions** | Renovate, lundi matin | [`renovate.json`](renovate.json) : PR de montée pour chaque image / chart amont épinglé (annoté `# renovate:` dans [`platform/instance.yaml`](platform/instance.yaml)) | **avis** sur chaque PR Renovate : ce qui touche CE dépôt, verdict (Sonnet, 8 tours, [`version-review.yml`](.github/workflows/version-review.yml)) | ~0,3 session/PR |
+| 7 | **Dérive** | à la main ou cron du poste admin, hebdo | [`drift.sh`](scripts/drift.sh) : l'Ingress des hôtes d'API ([`edge/api-hosts.yaml`](edge/api-hosts.yaml), appliqué hors Argo) comparé au cluster, et les releases Helm présentes (le socle, tout en Argo, ne devrait plus en avoir) | aucune | 0 |
 | 3 | **Dépouillement du WAF** | à la main, quotidien pendant la phase DetectionOnly | [`waf-digest.py`](scripts/waf-digest.py) : alertes condensées, sans données personnelles | **`--ask`** : tri faux positifs / suspects, exclusions au format de WAF.md (Sonnet, 3 tours) | ~0,1 session/jour, 1 à 2 semaines |
 
 > **Retraits de phase 5.** Les applications ne sont plus des « locataires »

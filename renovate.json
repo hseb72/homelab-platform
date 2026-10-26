@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Veille sur les versions épinglées du socle. Renovate détecte et ouvre la PR ; le workflow version-review y ajoute un avis (Claude, plafonné). Rien n'est fusionné automatiquement.",
+  "description": "Veille sur les versions épinglées du socle. Depuis le retrait des charts maison (phase 5), tout ce qui est épinglé vit dans platform/instance.yaml (images et charts amont de charts/platform), annoté « # renovate: ». Renovate détecte et ouvre la PR ; le workflow version-review y ajoute un avis (Claude, plafonné). Rien n'est fusionné automatiquement.",
   "extends": ["config:recommended", ":dependencyDashboard"],
   "timezone": "Europe/Paris",
   "schedule": ["before 6am on monday"],
@@ -10,40 +10,19 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Tags d'image annotés « # renovate: » au-dessus de la ligne tag:",
-      "managerFilePatterns": ["/(^|/)values-prod\\.yaml$/", "/^gateway/values-kong\\.yaml$/"],
+      "description": "Images et charts amont annotés « # renovate: » dans platform/instance.yaml",
+      "managerFilePatterns": ["/^platform/instance\\.yaml$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\\n\\s*tag: \"(?<currentValue>[^\"]+)\""
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s*\\n\\s*image: \\S+:(?<currentValue>[^\\s\"#]+)",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: registryUrl=(?<registryUrl>\\S+))?\\s*\\n\\s*version: (?<currentValue>\\S+)",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s*\\n\\s*tag: \"(?<currentValue>[^\"]+)\""
       ]
-    },
-    {
-      "customType": "regex",
-      "description": "Version du chart ingress-nginx, épinglée dans la commande d'installation du runbook",
-      "managerFilePatterns": ["/^platform-ingress/README\\.md$/"],
-      "matchStrings": [
-        "helm upgrade --install platform-ingress ingress-nginx/ingress-nginx \\\\\\n\\s+-n platform-ingress --create-namespace --version (?<currentValue>\\S+)"
-      ],
-      "datasourceTemplate": "helm",
-      "depNameTemplate": "ingress-nginx",
-      "registryUrlTemplate": "https://kubernetes.github.io/ingress-nginx"
     }
   ],
   "packageRules": [
     {
-      "description": "Un seul client mc sur le cluster : ses deux occurrences montent ensemble.",
-      "matchDepNames": ["quay.io/minio/mc"],
-      "groupName": "client mc"
-    },
-    {
-      "description": "Une montée majeure de PostgreSQL impose dump et restauration : jamais proposée sans accord explicite.",
-      "matchDepNames": ["docker.io/library/postgres"],
-      "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true,
-      "labels": ["versions", "majeur"]
-    },
-    {
-      "description": "Majeures de Redis, Kong et ingress-nginx : PR à part, étiquetée.",
-      "matchDepNames": ["docker.io/library/redis", "docker.io/library/kong", "ingress-nginx"],
+      "description": "Majeures des moteurs (images et charts amont) : PR à part, étiquetée, jamais groupée.",
+      "matchDepNames": ["docker.io/library/redis", "docker.io/library/kong", "kong", "ingress-nginx", "cloudnative-pg", "vault"],
       "matchUpdateTypes": ["major"],
       "labels": ["versions", "majeur"]
     }
