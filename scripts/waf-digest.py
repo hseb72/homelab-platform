@@ -10,7 +10,7 @@ modèle, jamais les logs bruts : le coût est borné quel que soit le trafic, et
 rien de personnel ne sort. Les chaînes de requête sont coupées, les adresses IP
 seulement comptées.
 
-  kubectl -n platform-ingress logs deploy/platform-ingress-ingress-nginx-controller --since=24h \\
+  kubectl -n ingress logs deploy/platform-ingress-ingress-nginx-controller --since=24h \\
     | scripts/waf-digest.py > digest.md
 
 Avec --ask, le digest est soumis à Claude (une seule requête, Sonnet, 3 tours au
@@ -105,14 +105,14 @@ def main() -> int:
 
     consigne = (
         "Voici le digest des alertes du WAF ModSecurity (CRS) en DetectionOnly, et le "
-        "runbook platform-ingress/WAF.md. Pour chaque règle du digest, dis : faux positif "
+        "runbook edge/WAF.md. Pour chaque règle du digest, dis : faux positif "
         "probable (trafic légitime de la plateforme) ou trafic réellement suspect, en une "
         "ligne. Puis propose les exclusions à ajouter au modsecurity-snippet, au format "
         "de WAF.md : ciblées par chemin, ids locaux à partir de 1000, SANS apostrophe, "
         "SANS commentaire ni guillemet dans le fragment. Ne propose jamais d'exclure une "
         "règle globalement. Termine par : prêt ou non pour SecRuleEngine On. En français, "
         "court.\n\n"
-        + digest + "\n---\n" + (RACINE / "platform-ingress/WAF.md").read_text(encoding="utf-8")
+        + digest + "\n---\n" + (RACINE / "edge/WAF.md").read_text(encoding="utf-8")
     )
     return subprocess.run(
         ["claude", "-p", "--model", "sonnet", "--max-turns", "3"],

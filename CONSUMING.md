@@ -36,7 +36,7 @@ rend le partage tenable.
 
 | Ressource | Le service | On la demande… | On la joint à… | Isolation | Contrainte |
 |---|---|---|---|---|---|
-| **Exposition d'API** | Kong + ingress | hôte dans [`gateway/10-ingress-api-hosts.yaml`](gateway/) + Ingress classe `kong` chez soi | `kong-proxy.gateway.svc.cluster.local` (interne) | classe `kong` dédiée, routes par namespace | préserver l'en-tête `Host` |
+| **Exposition d'API** | Kong + ingress | hôte dans [`edge/api-hosts.yaml`](edge/) + Ingress classe `kong` chez soi | `kong-proxy.kong.svc.cluster.local` (interne) | classe `kong` dédiée, routes par namespace | préserver l'en-tête `Host` |
 
 Le détail de chaque service — et le « pourquoi » de ses choix — est dans son
 propre `README.md`.
@@ -75,11 +75,11 @@ ses identifiants depuis les secrets. Poser aussi
 défaut + sorties vers les services utilisés).
 
 **5. Exposer l'API, si besoin.**
-Deux ressources (cf. [`gateway/README.md`](gateway/)) :
+Deux ressources (cf. [`edge/README.md`](edge/)) :
 [`api-ingress.yaml`](examples/consumer-app/api-ingress.yaml) pour les routes de
 classe `kong` chez soi, **et** une entrée d'hôte à ajouter à
-`gateway/10-ingress-api-hosts.yaml`. Ajouter au namespace la règle d'entrée
-depuis `gateway` (fournie dans `networkpolicy.yaml`).
+[`edge/api-hosts.yaml`](edge/api-hosts.yaml). Ajouter au namespace la règle
+d'entrée depuis le namespace `kong` (fournie dans `networkpolicy.yaml`).
 
 ## Ce dont l'application n'a PAS à s'occuper
 
@@ -97,7 +97,7 @@ depuis `gateway` (fournie dans `networkpolicy.yaml`).
 - **MinIO** — n'écrire que dans **ses** seaux (ceux déclarés pour le locataire) ;
   la politique refuse le reste (`Access Denied`).
 - **API** — ne jamais réécrire l'en-tête `Host` si la logique applicative en
-  dépend ; passer les appels internes par `kong-proxy.gateway.svc`, pas en direct.
+  dépend ; passer les appels internes par `kong-proxy.kong.svc`, pas en direct.
 
 ## Checklist d'onboarding
 
@@ -107,6 +107,6 @@ depuis `gateway` (fournie dans `networkpolicy.yaml`).
 - [ ] Secrets d'accès déposés côté application **et scellés**.
 - [ ] NetworkPolicies de l'application posées (refus par défaut + sorties).
 - [ ] Application déployée, connexions vérifiées.
-- [ ] (Si API) hôte ajouté au socle + Ingress `kong` + règle d'entrée `gateway`.
+- [ ] (Si API) hôte ajouté à `edge/api-hosts.yaml` + Ingress classe `kong` chez soi + règle d'entrée depuis `kong`.
 - [ ] Cloisonnement éprouvé (une ressource voisine doit être refusée — cf. la
       section « Vérification » du README de chaque service).

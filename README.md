@@ -27,29 +27,31 @@ provisionnés par application et instanciés ici dans [`platform/`](platform/).
 Chaque application porte sa propre `Application` Argo pointant `charts/app` ; il
 n'y a plus de liste de « locataires » tenue dans ce dépôt.
 
-**Moteurs d'infra — installés en CLI-Helm, hors Argo.** Le frontal et la
-gateway portent ce dont Argo lui-même dépend : ils se tiennent volontairement en
-dessous. Chart **amont** épinglé, **valeurs versionnées ici**, install par
-`helm upgrade --install` en ligne de commande — comme cert-manager, CNPG et
-VictoriaMetrics. Le README de chaque dossier porte le runbook et les invariants.
+**Moteur d'edge — instancié par `charts/platform`.** Le frontal ingress-nginx
+(classe `nginx`, TLS, WAF ModSecurity) et la gateway Kong DB-less sont désormais
+rendus par `charts/platform` via l'app-of-apps [`platform/`](platform/) (ns
+`ingress` et `kong`), et non plus par des charts maison installés en CLI-Helm
+(phase 5 — les anciens `platform-ingress/` et `gateway/` ont été retirés).
 
-| Composant | Namespace | Chart amont | État |
-|---|---|---|---|
-| [`platform-ingress/`](platform-ingress/) — ingress-nginx (frontal, TLS, WAF) | `platform-ingress` | `ingress-nginx/ingress-nginx` | en service, rapatrié |
-| [`gateway/`](gateway/) — Kong OSS DB-less (API gateway) | `gateway` | `kong/kong` | en service, rapatrié |
+| Composant | Namespace | Où |
+|---|---|---|
+| Frontal ingress-nginx (TLS, WAF) | `ingress` | [`platform/`](platform/) (`charts/platform`) |
+| Kong OSS DB-less (API gateway) | `kong` | [`platform/`](platform/) (`charts/platform`) |
 
-D'autres moteurs tournent aujourd'hui sur le cluster sans être encore décrits
-ici (cert-manager, la supervision) ; les rapatrier n'a d'intérêt que si on le
-fait sans interruption de service.
+Il reste à CE dépôt **deux responsabilités d'edge**, dans [`edge/`](edge/) :
+l'Ingress des hôtes d'API centralisés (`edge/api-hosts.yaml`, appliqué à la
+main, hors Argo) et le runbook du WAF (`edge/WAF.md`).
 
 ## Déployer, consommer
 
-- **[`DEPLOY.md`](DEPLOY.md)** — installer le socle, dans l'ordre (projet Argo CD
-  partagé → tags d'image → secrets scellés → Applications).
-- **[`CONSUMING.md`](CONSUMING.md)** — le protocole de consommation : comment une
-  application obtient et câble ses ressources (seau + compte, base + rôle,
-  exposition d'API). Gabarits copiables dans
-  [`examples/consumer-app/`](examples/consumer-app/).
+- **[`DEPLOY.md`](DEPLOY.md)** — où se fait quoi aujourd'hui (socle via
+  `charts/platform` dans [`platform/`](platform/), provisioning par application
+  via `charts/app`). En transition — réécriture autour de `charts/platform` en
+  cours (phase 5).
+- **[`CONSUMING.md`](CONSUMING.md)** — le protocole de consommation. La partie
+  **exposition d'API** (Ingress d'hôte dans `edge/`, routes Kong chez l'app)
+  reste d'actualité ; le reste (ancien modèle locataire) est en cours de
+  réécriture autour de `charts/app`.
 
 ## Évoluer
 
@@ -60,22 +62,25 @@ fait sans interruption de service.
 
 ## Automatiser
 
-- **[`AGENTS.md`](AGENTS.md)** — l'épreuve de restauration hebdomadaire, la
-  veille de versions, la dérive des moteurs CLI-Helm, le dépouillement du WAF.
-  Le script d'abord ; l'IA en exception, plafonnée. (Le guichet d'onboarding a
-  été retiré en phase 5 : les apps consomment le socle via `charts/app`.)
+- **[`AGENTS.md`](AGENTS.md)** — la veille de versions, la dérive, le
+  dépouillement du WAF. Le script d'abord ; l'IA en exception, plafonnée. (En
+  phase 5, le guichet d'onboarding et l'épreuve de restauration maison ont été
+  retirés : les apps consomment le socle via `charts/app`, et la sauvegarde est
+  assurée par CloudNativePG.)
 
 ## Principes
 
-- **Un composant par répertoire**, avec son `README.md`. Les backends applicatifs
-  ajoutent leurs valeurs de production et leurs manifestes Argo CD ; les moteurs
-  d'infra, leurs valeurs de chart amont et leur runbook d'installation.
+- **Un composant par répertoire**, avec son `README.md`. Le socle (datastores,
+  edge, supervision) est instancié par `charts/platform` depuis
+  [`platform/`](platform/) ; [`edge/`](edge/) porte les manifestes d'edge
+  appliqués à la main.
 - **Chaque application déclare son besoin chez elle.** Un composant mutualisé
   admet ses clients par une **étiquette de namespace**, jamais par une liste
   tenue ici — sinon chaque arrivée impose une modification de ce dépôt, et
-  l'écart avec la réalité s'installe. (La gateway a une exception assumée : les
-  hôtes d'API vivent dans un Ingress centralisé du namespace `gateway`, un
-  Ingress ne pouvant référencer qu'un Service de son propre namespace.)
+  l'écart avec la réalité s'installe. (Une exception assumée : les hôtes d'API
+  vivent dans un Ingress centralisé du namespace `kong`
+  [`edge/api-hosts.yaml`](edge/api-hosts.yaml), un Ingress ne pouvant référencer
+  qu'un Service de son propre namespace.)
 - **Aucun secret dans Git.** Les secrets sont créés hors chart et scellés.
 - **Pod Security `restricted`** sur les namespaces des backends, conteneurs non
   privilégiés, refus réseau par défaut.
