@@ -45,9 +45,9 @@ Les sceller ensuite avec `kubeseal`, comme les autres secrets du cluster.
 ## 2. Installation
 
 ```bash
-# Le projet Argo CD partagé est livré avec object-store ; l'appliquer une fois
-# suffit pour tout le socle.
-kubectl apply -f object-store/argocd/project.yaml
+# Le projet Argo CD partagé (homelab-platform). À appliquer une fois, avant
+# l'Application. (Depuis le retrait de object-store en phase 5, il vit ici.)
+kubectl apply -f database/argocd/project.yaml
 kubectl apply -f database/argocd/application.yaml
 kubectl -n argocd get application database -w
 ```

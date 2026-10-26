@@ -28,8 +28,12 @@ sous sa forme la plus simple : GitOps plutôt qu'une interface, pour l'instant.
 
 | Composant | Namespace | État |
 |---|---|---|
-| [`object-store/`](object-store/) — MinIO mutualisé (stockage objet) | `object-store` | à installer |
-| [`database/`](database/) — PostgreSQL mutualisé (données) | `database` | à installer |
+| [`database/`](database/) — PostgreSQL mutualisé (données) | `database` | en retrait (phase 5) |
+
+> Le stockage objet maison (`object-store/`, MinIO) a été retiré en phase 5 :
+> les applications consomment désormais le MinIO mutualisé de `charts/platform`
+> (ns `minio`). La base `database/` suit le même chemin vers le PostgreSQL
+> mutualisé CloudNativePG (ns `postgres`).
 
 **Moteurs d'infra — installés en CLI-Helm, hors Argo.** Le frontal et la
 gateway portent ce dont Argo lui-même dépend : ils se tiennent volontairement en

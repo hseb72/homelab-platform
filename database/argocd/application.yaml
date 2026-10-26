@@ -6,8 +6,8 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  # Le projet homelab-platform est partagé par tous les composants de socle ; il
-  # est livré avec object-store et admet le namespace `database`.
+  # Le projet homelab-platform (défini dans database/argocd/project.yaml depuis
+  # le retrait de object-store en phase 5) admet le namespace `database`.
   project: homelab-platform
   source:
     repoURL: https://github.com/hseb72/homelab-platform.git

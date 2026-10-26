@@ -26,7 +26,6 @@ rend le partage tenable.
 
 | Ressource | Le service | On la demande… | On la joint à… | Isolation | Contrainte |
 |---|---|---|---|---|---|
-| **Stockage objet** | MinIO | entrée `tenants` dans [`object-store/values.yaml`](object-store/) + clé dans `object-store-tenant-keys` | `minio.object-store.svc.cluster.local:9000` | politique bornée aux seuls seaux du locataire | compte = `access-key`, clé = `secret-key` |
 | **Base de données** | PostgreSQL | entrée `tenants` dans [`database/values.yaml`](database/) + mot de passe dans `database-tenant-keys` | `postgres.database.svc.cluster.local:5432` | `CONNECT` réservé au propriétaire de la base | se connecter avec `user=<locataire>`, `dbname=<base>` |
 | **Exposition d'API** | Kong + ingress | hôte dans [`gateway/10-ingress-api-hosts.yaml`](gateway/) + Ingress classe `kong` chez soi | `kong-proxy.gateway.svc.cluster.local` (interne) | classe `kong` dédiée, routes par namespace | préserver l'en-tête `Host` |
 
@@ -39,9 +38,10 @@ Pour une application `mon-appli` (adapter le nom partout).
 
 **1. Poser le namespace, avec ses étiquettes d'adhésion.**
 Copier [`examples/consumer-app/namespace.yaml`](examples/consumer-app/namespace.yaml).
-Les étiquettes `object-store-client`, `database-client`, `cache-client` sont ce
-que sélectionnent les NetworkPolicies des services : les porter, c'est ouvrir la
-porte ; ne garder que celles des services réellement utilisés.
+L'étiquette `database-client` est ce que sélectionne la NetworkPolicy du
+service : la porter, c'est ouvrir la porte. (Le stockage objet maison et le
+cache ayant été retirés en phase 5, leurs étiquettes `object-store-client` /
+`cache-client` n'ont plus d'effet ici.)
 
 **2. Demander les ressources (côté admin du socle).**
 Pour chaque service utilisé, à la main :
