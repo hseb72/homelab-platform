@@ -19,15 +19,18 @@ La fusion d'une PR reste le seul point de passage vers le cluster.
 
 | # | Agent | Déclencheur | Le script | L'IA | Quota estimé |
 |---|---|---|---|---|---|
-| 4 | **Épreuve de restauration** | CronJob, dimanche 4 h 40 | [`restore-check`](database/templates/backup/restore-check-cronjob.yaml) : dernier dump rejoué dans un PostgreSQL jetable, comparé à la prod | aucune ; l'échec du Job **est** l'alerte ([règles vmalert](database/README.md#épreuve-automatique-chaque-dimanche)) | 0 |
 | 5 | **Veille de versions** | Renovate, lundi matin | [`renovate.json`](renovate.json) : PR de montée pour chaque tag épinglé | **avis** sur chaque PR Renovate : ce qui touche CE dépôt, verdict (Sonnet, 8 tours, [`version-review.yml`](.github/workflows/version-review.yml)) | ~0,3 session/PR |
 | 7 | **Dérive** | à la main ou cron du poste admin, hebdo | [`drift.sh`](scripts/drift.sh) : valeurs et version des moteurs CLI-Helm, manifestes bruts, releases non décrites | aucune | 0 |
 | 3 | **Dépouillement du WAF** | à la main, quotidien pendant la phase DetectionOnly | [`waf-digest.py`](scripts/waf-digest.py) : alertes condensées, sans données personnelles | **`--ask`** : tri faux positifs / suspects, exclusions au format de WAF.md (Sonnet, 3 tours) | ~0,1 session/jour, 1 à 2 semaines |
 
-> **Guichet d'onboarding retiré (phase 5).** Les applications ne sont plus des
-> « locataires » déclarés ici : chacune consomme le socle `platform-patterns`
-> via `charts/app` depuis SON dépôt (une `Application` Argo). Les agents 1
-> (guichet) et 2 (clés/vérification) et leurs scripts/workflows n'existent plus.
+> **Retraits de phase 5.** Les applications ne sont plus des « locataires »
+> déclarés ici : chacune consomme le socle `platform-patterns` via `charts/app`
+> depuis SON dépôt (une `Application` Argo). Les agents 1 (guichet) et 2
+> (clés/vérification) et leurs scripts/workflows n'existent plus. L'agent 4
+> (**épreuve de restauration**) est parti avec le chart `database/` : la
+> sauvegarde et le PITR sont désormais assurés par CloudNativePG (`charts/platform`,
+> ns `postgres`) ; l'épreuve de restauration côté socle mutualisé reste à
+> réoutiller là-bas.
 
 ## Mise en service (une fois)
 
@@ -38,8 +41,6 @@ La fusion d'une PR reste le seul point de passage vers le cluster.
    fournit au workflow le jeton qui poste les commentaires.
 3. **Renovate** : installer l'app *Mend Renovate* sur le dépôt. Sa PR
    d'accueil valide `renovate.json` — à relire avant de la fusionner.
-4. **Alertes** : poser les deux règles vmalert de l'épreuve de restauration
-   (database/README.md §4). Sans elles, l'épreuve échoue en silence.
 
 ## Pas encore en place
 
