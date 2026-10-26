@@ -1,5 +1,15 @@
 # Protocole de consommation du socle
 
+> **Phase 5 — modèle en transition.** Ce document décrit le « guichet » des
+> datastores maison (locataires déclarés ici, Job de provisionnement, clés de
+> locataires). Ces backends ont été retirés : une application consomme désormais
+> les datastores mutualisés de `charts/platform` (PostgreSQL `postgres`, MinIO
+> `minio`, Redis `redis`) via sa propre `Application` `charts/app`, et se
+> provisionne elle-même à partir de credentials d'admin émis une fois côté socle
+> (cf. [`docs/alignement-patterns-1.0.0.md`](docs/alignement-patterns-1.0.0.md)
+> §6). Seule la partie **exposition d'API** (Kong + ingress) ci-dessous reste
+> d'actualité ; le reste sera réécrit autour de `charts/app`.
+
 Comment une application obtient et utilise les ressources mutualisées du cluster.
 Le principe est le même pour toutes : **l'instance est partagée, mais chaque
 application reçoit une ressource isolée avec son propre compte** — un seau et sa
@@ -26,7 +36,6 @@ rend le partage tenable.
 
 | Ressource | Le service | On la demande… | On la joint à… | Isolation | Contrainte |
 |---|---|---|---|---|---|
-| **Base de données** | PostgreSQL | entrée `tenants` dans [`database/values.yaml`](database/) + mot de passe dans `database-tenant-keys` | `postgres.database.svc.cluster.local:5432` | `CONNECT` réservé au propriétaire de la base | se connecter avec `user=<locataire>`, `dbname=<base>` |
 | **Exposition d'API** | Kong + ingress | hôte dans [`gateway/10-ingress-api-hosts.yaml`](gateway/) + Ingress classe `kong` chez soi | `kong-proxy.gateway.svc.cluster.local` (interne) | classe `kong` dédiée, routes par namespace | préserver l'en-tête `Host` |
 
 Le détail de chaque service — et le « pourquoi » de ses choix — est dans son

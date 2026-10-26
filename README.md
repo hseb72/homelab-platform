@@ -17,23 +17,15 @@ l'application de gestion immobilière. D'où ce dépôt.
 
 Deux paliers, selon ce dont dépend le composant.
 
-**Backends applicatifs — pilotés par Argo CD.** Un chart maison par composant,
-synchronisé depuis Git. Une instance partagée, et pour chaque application **une
-ressource isolée avec son compte** — un seau et sa clé pour MinIO, une base et
-son rôle pour PostgreSQL, un préfixe de clés et son compte ACL pour Redis.
-L'application déclare son besoin chez elle (étiquette de namespace) et le
-locataire est déclaré ici, en une entrée relue en revue de code ; un Job de
-provisionnement idempotent applique le reste. C'est le « portail de services »
-sous sa forme la plus simple : GitOps plutôt qu'une interface, pour l'instant.
-
-| Composant | Namespace | État |
-|---|---|---|
-| [`database/`](database/) — PostgreSQL mutualisé (données) | `database` | en retrait (phase 5) |
-
-> Le stockage objet maison (`object-store/`, MinIO) a été retiré en phase 5 :
-> les applications consomment désormais le MinIO mutualisé de `charts/platform`
-> (ns `minio`). La base `database/` suit le même chemin vers le PostgreSQL
-> mutualisé CloudNativePG (ns `postgres`).
+**Backends applicatifs — retirés (phase 5).** Les datastores mutualisés maison
+(MinIO `object-store/`, PostgreSQL `database/`, Redis `cache/`) et leur tooling
+d'onboarding ont tous été retirés. Les applications consomment désormais
+directement les datastores mutualisés de
+[`charts/platform`](https://github.com/hseb72/platform-patterns) — PostgreSQL
+CloudNativePG (ns `postgres`), MinIO (ns `minio`), Redis (ns `redis`) —,
+provisionnés par application et instanciés ici dans [`platform/`](platform/).
+Chaque application porte sa propre `Application` Argo pointant `charts/app` ; il
+n'y a plus de liste de « locataires » tenue dans ce dépôt.
 
 **Moteurs d'infra — installés en CLI-Helm, hors Argo.** Le frontal et la
 gateway portent ce dont Argo lui-même dépend : ils se tiennent volontairement en
