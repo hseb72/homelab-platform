@@ -11,27 +11,21 @@ concurrency:
 
 jobs:
   # Plus aucun chart maison à rendre depuis le retrait des backends de socle
-  # (object-store, database, cache — phase 5). Ne restent que les moteurs d'infra
-  # installés en CLI-Helm (platform-ingress, gateway) : on ne rend pas de chart
-  # maison, mais on vérifie que les manifests bruts sont conformes au schéma
-  # Kubernetes et que les fichiers de valeurs parsent.
-  infra:
+  # (object-store, database, cache — phase 5), et le moteur d'edge est désormais
+  # instancié par charts/platform. Ne reste, côté manifests bruts de CE dépôt,
+  # que l'Ingress des hôtes d'API centralisés (edge/api-hosts.yaml), appliqué à
+  # la main : on vérifie qu'il est conforme au schéma Kubernetes et que les
+  # valeurs du socle (platform/instance.yaml) parsent.
+  edge:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Conformité des manifests bruts au schéma Kubernetes
+      - name: Conformité de l'Ingress des hôtes d'API au schéma Kubernetes
         run: |
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
-          # Manifests bruts = fichiers numérotés (NN-*.yaml). Les fichiers
-          # `values-*.yaml` sont des valeurs de chart amont, pas des objets k8s.
-          shopt -s nullglob
-          manifests=(gateway/[0-9]*-*.yaml)
-          echo "manifests : ${manifests[*]}"
-          ./kubeconform -strict -ignore-missing-schemas -summary "${manifests[@]}"
+          ./kubeconform -strict -ignore-missing-schemas -summary edge/api-hosts.yaml
 
-      - name: Les fichiers de valeurs parsent
+      - name: Les valeurs du socle parsent
         run: |
-          for f in platform-ingress/values-ingress-nginx.yaml gateway/values-kong.yaml; do
-            python3 -c "import yaml,sys; list(yaml.safe_load_all(open('$f'))); print('$f : OK')"
-          done
+          python3 -c "import yaml; list(yaml.safe_load_all(open('platform/instance.yaml'))); print('platform/instance.yaml : OK')"

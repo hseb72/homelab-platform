@@ -109,7 +109,8 @@ du *cluster*, pas du chart.
 ## Phase 3 — bascule de l'edge (fenêtre big-bang, une seule IP)
 
 `ingress`, `kong` et `routeReport` sont activés dans `instance.yaml`, avec les
-valeurs WAF/Kong portées de l'ancien edge (`platform-ingress/`, `gateway/`). Le
+valeurs WAF/Kong portées de l'ancien edge CLI-Helm (`platform-ingress/` et
+`gateway/`, retirés en phase 5 — `instance.yaml` en est désormais la source). Le
 cluster n'a **qu'une IP publique** : deux Services LoadBalancer ne peuvent pas
 tenir `:80/:443` en même temps → il faut **retirer l'ancien edge avant** que le
 nouveau ne prenne l'IP.
@@ -147,9 +148,11 @@ kubectl -n argocd get applications        # platform-ingress, platform-kong : Sy
 
 La même classe `nginx` + le même Service LoadBalancer font que **tous les
 Ingress existants sont repris sans modification ni changement DNS** (invariant
-de la reprise, cf. `platform-ingress/WAF.md`). Le `routeReport` devient utile
-dès que des routes de classe `kong` existent.
+de la reprise, cf. [`edge/WAF.md`](../edge/WAF.md)). Le `routeReport` devient
+utile dès que des routes de classe `kong` existent.
 
-**Rollback** (tant qu'aucune app n'a migré) : repasser `ingress`/`kong` à
-`enabled: false` dans `instance.yaml`, puis réinstaller l'ancien edge
-(`helm upgrade --install platform-ingress …` + `kong …`).
+> Section conservée comme **compte rendu** : la bascule est faite. Les dossiers
+> `platform-ingress/` et `gateway/` ont été retirés en phase 5 ; un rollback
+> passerait désormais par l'historique Git (les valeurs de l'ancien edge y
+> restent), en repassant `ingress`/`kong` à `enabled: false` dans
+> `instance.yaml`.

@@ -131,9 +131,10 @@ vault:
 # ── Edge ingress (ingress-nginx) — ns `ingress` ──────────────────────────────
 # `front` chez les patterns ; renommé `ingress` ici (cf. doc §2). Les apps le
 # désignent par `shared.webIngress.controllerNamespace: ingress`.
-# Valeurs portées depuis platform-ingress/values-ingress-nginx.yaml (l'edge
-# actuel) : classe `nginx`, Service LoadBalancer (même IP nœud), WAF en
-# observation, webhook d'admission désactivé.
+# Valeurs de l'edge : classe `nginx`, Service LoadBalancer (même IP nœud), WAF en
+# observation, webhook d'admission désactivé. (Portées depuis l'ancien chart
+# CLI-Helm `platform-ingress/`, retiré en phase 5 ; ce bloc en est désormais la
+# source de vérité.)
 ingress:
   enabled: true
   namespace: ingress
@@ -156,7 +157,7 @@ ingress:
       config:
         # DNAT direct : trafic en TCP nu, pas de proxy_protocol.
         use-proxy-protocol: "false"
-        # WAF ModSecurity + CRS OWASP, EN OBSERVATION (cf. platform-ingress/WAF.md).
+        # WAF ModSecurity + CRS OWASP, EN OBSERVATION (cf. edge/WAF.md).
         enable-modsecurity: "true"
         enable-owasp-modsecurity-crs: "true"
         # ⚠ AUCUN COMMENTAIRE NI APOSTROPHE dans le fragment : ingress-nginx
@@ -181,8 +182,9 @@ ingress:
         limits:   { cpu: "1",  memory: 1Gi }
 
 # ── Kong (API gateway, Ingress Controller) — ns `kong` ───────────────────────
-# Valeurs portées depuis gateway/values-kong.yaml. Kong est DERRIÈRE l'edge
-# (ClusterIP, jamais exposé direct) ; ne traite que `/api`.
+# Valeurs de Kong (portées depuis l'ancien chart CLI-Helm `gateway/`, retiré en
+# phase 5 ; ce bloc en est désormais la source de vérité). Kong est DERRIÈRE
+# l'edge (ClusterIP, jamais exposé direct) ; ne traite que `/api`.
 kong:
   enabled: true
   namespace: kong

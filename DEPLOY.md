@@ -21,9 +21,16 @@
   d'admin de provisioning émis une fois côté socle. Procédure :
   [`docs/alignement-patterns-1.0.0.md`](docs/alignement-patterns-1.0.0.md) §6.
 
-## Moteurs d'infra encore installés en CLI-Helm
+## Edge
 
-`platform-ingress/` (ingress-nginx) et `gateway/` (Kong) restent décrits ici
-le temps de leur bascule vers les `ingress`/`kong` de `charts/platform` ;
-install par `helm upgrade --install`, hors Argo, commandes dans leur
-`README.md`.
+Le frontal ingress-nginx (ns `ingress`) et Kong (ns `kong`) sont instanciés par
+`charts/platform` ([`platform/`](platform/)) — plus de chart maison ni
+d'install CLI-Helm. Il reste deux manifestes d'edge propres à ce dépôt, dans
+[`edge/`](edge/), appliqués à la main :
+
+```bash
+kubectl apply -f edge/api-hosts.yaml   # hôtes d'API centralisés (Ingress nginx → kong-proxy)
+```
+
+Le WAF (ModSecurity, en observation) est configuré dans `platform/instance.yaml` ;
+son runbook est dans [`edge/WAF.md`](edge/WAF.md).
