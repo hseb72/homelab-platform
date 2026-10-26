@@ -45,7 +45,13 @@ postgres:
     enabled: true
     # Dimanche 3 h 05 (décalé de l'heure ronde) : base backup hebdomadaire ;
     # l'archivage WAL continu assure le PITR entre deux.
-    schedule: "5 3 * * 0"
+    #
+    # ⚠ CNPG attend un cron à SIX champs (secondes en tête, format robfig/cron),
+    # pas les cinq champs d'un CronJob Kubernetes. Un « 5 3 * * 0 » est lu
+    # « secondes=5 minutes=3 heure=* jour=* mois=0 » — et mois 0 tombe sous le
+    # minimum 1, d'où le refus du webhook d'admission. Ici : secondes, puis
+    # 5 3 * * 0.
+    schedule: "0 5 3 * * 0"
     retentionPolicy: 30d
     destinationPath: s3://postgres-backups/
     endpointURL: http://minio.minio.svc.cluster.local:9000
