@@ -14,10 +14,10 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 | **SSO** (Keycloak) | `sso` | `sso.crealcs.com` (canonique, issuer OIDC) + `sso.system.crealcs.com` (alias) | **extrait** → `system/sso/` |
 | **Argo CD** | `argocd` | `argocd.system.crealcs.com` | **extrait** (ingress UI en GitOps ; install = bootstrap manuel) → `system/argocd/` |
 | **Monitoring** (Grafana/VictoriaMetrics) | `monitoring` | `grafana.system.crealcs.com` | **extrait (Helm CLI)** → `system/monitoring/` |
-| **Mesure d'audience** (Matomo + MariaDB) | `matomo` | `stats.crealcs.com` (canonique, appelé par les navigateurs) + `matomo.system.crealcs.com` (alias) | **ajouté** → `system/analytics/` |
+| **Mesure d'audience** (Matomo + MariaDB) | `matomo` | `stats.system.crealcs.com` (suivi et administration) | **ajouté** → `system/analytics/` |
 
-> Matomo suit le même schéma que le SSO : `stats.crealcs.com` est appelé par les
-> navigateurs des visiteurs et inscrit dans la configuration des applications.
+> Matomo suit le schéma `.system` : `stats.system.crealcs.com` sert à la fois le suivi
+> (appelé par les navigateurs des visiteurs, inscrit chez les applications) et l'admin.
 >
 > Le SSO garde `sso.crealcs.com` comme hôte **canonique** : c'est l'issuer OIDC codé
 > dans tous les clients. Le schéma `.system` ne s'y applique qu'en **alias**. Pour

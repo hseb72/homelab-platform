@@ -72,7 +72,7 @@ spec:
                 sleep 3600
                 if [ -f /var/www/html/config/config.ini.php ]; then
                   su -s /bin/sh www-data -c \
-                    "php /var/www/html/console core:archive --url=https://stats.crealcs.com" \
+                    "php /var/www/html/console core:archive --url=https://stats.system.crealcs.com" \
                     && echo "archivage terminé" || echo "archivage en échec"
                 fi
               done
