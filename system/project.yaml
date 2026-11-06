@@ -19,7 +19,10 @@ spec:
     # (le monitoring est une release Helm CLI, pas une Application Argo.)
   # Le SSO et Matomo n'ont que des ressources namespacées (Deployment, StatefulSet,
   # Service, Ingress, CronJob, NetworkPolicy, Cluster CNPG, VMServiceScrape, VMRule).
-  # Pas de cluster-scoped → liste vide (le ns est créé par CreateNamespace).
-  clusterResourceWhitelist: []
+  # Seule ressource cluster-scoped : le Namespace, qu'Argo gère dès qu'une Application
+  # pose `managedNamespaceMetadata` (étiquette minio-client du ns matomo). Les
+  # destinations ci-dessus bornent toujours les namespaces visés.
+  clusterResourceWhitelist:
+    - { group: "", kind: Namespace }
   namespaceResourceWhitelist:
     - { group: "*", kind: "*" }
