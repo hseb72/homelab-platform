@@ -14,7 +14,11 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
 | **SSO** (Keycloak) | `sso` | `sso.crealcs.com` (canonique, issuer OIDC) + `sso.system.crealcs.com` (alias) | **extrait** → `system/sso/` |
 | **Argo CD** | `argocd` | `argocd.system.crealcs.com` | **extrait** (ingress UI en GitOps ; install = bootstrap manuel) → `system/argocd/` |
 | **Monitoring** (Grafana/VictoriaMetrics) | `monitoring` | `grafana.system.crealcs.com` | **extrait (Helm CLI)** → `system/monitoring/` |
+| **Mesure d'audience** (Matomo + MariaDB) | `matomo` | `stats.crealcs.com` (canonique, appelé par les navigateurs) + `matomo.system.crealcs.com` (alias) | **ajouté** → `system/analytics/` |
 
+> Matomo suit le même schéma que le SSO : `stats.crealcs.com` est appelé par les
+> navigateurs des visiteurs et inscrit dans la configuration des applications.
+>
 > Le SSO garde `sso.crealcs.com` comme hôte **canonique** : c'est l'issuer OIDC codé
 > dans tous les clients. Le schéma `.system` ne s'y applique qu'en **alias**. Pour
 > argocd/grafana (UIs d'admin), `.system` est l'hôte principal.
@@ -27,8 +31,9 @@ Argo propre** (projet `system`), son namespace dédié, et un frontal en
   applique le projet puis l'Application une fois (`kubectl apply -f`), Argo gère la
   suite. Argo **adopte** l'existant sans coupure.
 - **Pas de dépendance croisée non voulue** : chaque outil a sa base/son stockage à lui
-  (le SSO a son propre `Cluster` CNPG). Les seules dépendances légitimes restent
-  apps → SSO (OIDC) et monitoring → tout (scrape en lecture).
+  (le SSO a son propre `Cluster` CNPG, Matomo sa MariaDB). Les seules dépendances
+  légitimes restent apps → SSO (OIDC), apps → Matomo (mesure d'audience, un site par
+  application) et monitoring → tout (scrape en lecture).
 
 ## Prochaines étapes
 

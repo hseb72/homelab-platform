@@ -26,6 +26,13 @@ jobs:
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
           ./kubeconform -strict -ignore-missing-schemas -summary edge/api-hosts.yaml
 
+      # Manifestes bruts de l'outillage synchronisés par Argo (projet system). Les CRD
+      # (Application, VMServiceScrape, VMRule) n'ont pas de schéma : ignorées.
+      - name: Conformité des manifestes de system/analytics au schéma Kubernetes
+        run: |
+          ./kubeconform -strict -ignore-missing-schemas -summary \
+            system/analytics/*.yaml system/analytics-application.yaml
+
       - name: Les valeurs du socle parsent
         run: |
           python3 -c "import yaml; list(yaml.safe_load_all(open('platform/instance.yaml'))); print('platform/instance.yaml : OK')"

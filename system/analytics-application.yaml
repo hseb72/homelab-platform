@@ -1,0 +1,41 @@
+# Application Argo CD de la mesure d'audience (Matomo), possédée par homelab-platform :
+# un seul Matomo, plusieurs sites (un par application consommatrice).
+#
+# Source : les manifestes bruts de system/analytics (MariaDB, Matomo, Ingress,
+# sauvegarde, NetworkPolicies, supervision). Le README (non-YAML) est ignoré par Argo.
+#
+# Bootstrap (une fois) : kubectl apply -f system/project.yaml puis
+#                        kubectl apply -f system/analytics-application.yaml
+# Prérequis dans le ns matomo : secrets `matomo-db` et `matomo-backup-s3`
+# (cf. system/analytics/README.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: analytics
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: system
+  source:
+    repoURL: https://github.com/hseb72/homelab-platform.git
+    targetRevision: main
+    path: system/analytics
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: matomo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    # Le ns se déclare client du MinIO mutualisé (sauvegardes), sans liste tenue ici.
+    managedNamespaceMetadata:
+      labels:
+        platform-patterns.io/minio-client: 'true'
+    retry:
+      limit: 5
+      backoff: { duration: 15s, factor: 2, maxDuration: 5m }
