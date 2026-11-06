@@ -1,0 +1,44 @@
+# Supervision par le monitoring du socle (opérateur VictoriaMetrics, ns `monitoring`) :
+# scrape de mysqld-exporter et règles d'alerte routées vers Slack par alertmanager.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: mariadb
+  namespace: matomo
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: mariadb }
+  endpoints:
+    - port: metrics
+      interval: 60s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: matomo
+  namespace: matomo
+spec:
+  groups:
+    - name: matomo
+      rules:
+        - alert: MatomoIndisponible
+          expr: kube_deployment_status_replicas_available{namespace="matomo",deployment="matomo"} < 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Matomo indisponible depuis 10 minutes"
+            description: "Aucun pod Matomo prêt dans le ns matomo : la mesure d'audience des sites est perdue pendant la panne."
+        - alert: MatomoBaseInjoignable
+          expr: mysql_up{namespace="matomo"} == 0
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "MariaDB de Matomo injoignable"
+            description: "mysqld-exporter ne joint plus la base : vérifier le pod mariadb-0 et son volume."
+        - alert: MatomoSauvegardeEnEchec
+          expr: kube_job_status_failed{namespace="matomo",job_name=~"mariadb-backup-.*"} > 0
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "Sauvegarde de la base Matomo en échec"
+            description: "Le dernier Job mariadb-backup a échoué : voir kubectl -n matomo logs job/<job> -c dump ou -c upload."

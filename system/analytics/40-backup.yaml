@@ -1,0 +1,65 @@
+# Sauvegarde quotidienne de la base Matomo vers le MinIO mutualisé (seau
+# `matomo-backups`), 30 jours de rétention. Le ns `matomo` porte l'étiquette
+# `platform-patterns.io/minio-client` (posée par l'Application Argo) : c'est elle qui
+# l'admet chez MinIO.
+#
+# Secret `matomo-backup-s3` (hors Git, cf. README) : access-key, secret-key d'un
+# utilisateur MinIO limité au seau `matomo-backups`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mariadb-backup
+  namespace: matomo
+spec:
+  # 2 h 17 (décalé de l'heure ronde et de la sauvegarde CNPG du dimanche 3 h 05).
+  schedule: '17 2 * * *'
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          initContainers:
+            - name: dump
+              # Même image que la base (outil mariadb-dump de même version).
+              # renovate: datasource=docker depName=docker.io/library/mariadb versioning=loose
+              image: docker.io/library/mariadb:11.4.13
+              command: ['sh', '-c']
+              args:
+                - |
+                  set -e
+                  mariadb-dump -h mariadb.matomo.svc.cluster.local -uroot \
+                    -p"$MARIADB_ROOT_PASSWORD" --single-transaction --routines matomo \
+                    | gzip > /backup/matomo-$(date +%Y-%m-%d).sql.gz
+                  ls -l /backup
+              env:
+                - name: MARIADB_ROOT_PASSWORD
+                  valueFrom: { secretKeyRef: { name: matomo-db, key: root-password } }
+              volumeMounts: [{ name: backup, mountPath: /backup }]
+          containers:
+            - name: upload
+              # renovate: datasource=docker depName=docker.io/rclone/rclone
+              image: docker.io/rclone/rclone:1.76.0
+              command: ['sh', '-c']
+              args:
+                - |
+                  set -e
+                  rclone copy /backup minio:matomo-backups/
+                  rclone delete --min-age 30d minio:matomo-backups/
+                  rclone ls minio:matomo-backups/ | tail -5
+              env:
+                - { name: RCLONE_CONFIG_MINIO_TYPE, value: s3 }
+                - { name: RCLONE_CONFIG_MINIO_PROVIDER, value: Minio }
+                - { name: RCLONE_CONFIG_MINIO_ENDPOINT, value: http://minio.minio.svc.cluster.local:9000 }
+                - name: RCLONE_CONFIG_MINIO_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: matomo-backup-s3, key: access-key } }
+                - name: RCLONE_CONFIG_MINIO_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: matomo-backup-s3, key: secret-key } }
+              volumeMounts: [{ name: backup, mountPath: /backup }]
+          volumes:
+            - name: backup
+              emptyDir: {}

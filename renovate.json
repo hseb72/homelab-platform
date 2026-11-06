@@ -10,8 +10,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Images et charts amont annotés « # renovate: » dans platform/instance.yaml",
-      "managerFilePatterns": ["/^platform/instance\\.yaml$/"],
+      "description": "Images et charts amont annotés « # renovate: » dans platform/instance.yaml et les manifestes de system/analytics",
+      "managerFilePatterns": ["/^platform/instance\\.yaml$/", "/^system/analytics/.+\\.yaml$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s*\\n\\s*image: \\S+:(?<currentValue>[^\\s\"#]+)",
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: registryUrl=(?<registryUrl>\\S+))?\\s*\\n\\s*version: (?<currentValue>\\S+)",
@@ -22,7 +22,7 @@
   "packageRules": [
     {
       "description": "Majeures des moteurs (images et charts amont) : PR à part, étiquetée, jamais groupée.",
-      "matchDepNames": ["docker.io/library/redis", "docker.io/library/kong", "kong", "ingress-nginx", "cloudnative-pg", "vault"],
+      "matchDepNames": ["docker.io/library/redis", "docker.io/library/kong", "kong", "ingress-nginx", "cloudnative-pg", "vault", "docker.io/library/mariadb", "docker.io/library/matomo"],
       "matchUpdateTypes": ["major"],
       "labels": ["versions", "majeur"]
     }

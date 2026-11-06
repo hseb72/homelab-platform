@@ -1,4 +1,4 @@
-# AppProject `system` — outillage de plateforme (SSO, puis Argo CD, monitoring).
+# AppProject `system` — outillage de plateforme (SSO, Argo CD, mesure d'audience).
 #
 # Isolé des applications ET du socle : ce projet ne gouverne que les namespaces
 # d'outillage. Objectif (cf. system/README.md) : sortir ce tooling de l'install
@@ -9,15 +9,17 @@ metadata:
   name: system
   namespace: argocd
 spec:
-  description: Outillage de plateforme (SSO Keycloak ; à venir Argo CD, monitoring) — isolé des applications
+  description: Outillage de plateforme (SSO Keycloak, Argo CD, Matomo) — isolé des applications
   sourceRepos:
     - https://github.com/hseb72/homelab-platform.git
   destinations:
     - { server: https://kubernetes.default.svc, namespace: sso }
     - { server: https://kubernetes.default.svc, namespace: argocd }   # frontal UI (ingress)
+    - { server: https://kubernetes.default.svc, namespace: matomo }   # mesure d'audience
     # (le monitoring est une release Helm CLI, pas une Application Argo.)
-  # Le SSO n'a que des ressources namespacees (Deployment, Service, Ingress,
-  # Cluster CNPG, Certificate). Pas de cluster-scoped → liste vide.
+  # Le SSO et Matomo n'ont que des ressources namespacées (Deployment, StatefulSet,
+  # Service, Ingress, CronJob, NetworkPolicy, Cluster CNPG, VMServiceScrape, VMRule).
+  # Pas de cluster-scoped → liste vide (le ns est créé par CreateNamespace).
   clusterResourceWhitelist: []
   namespaceResourceWhitelist:
     - { group: "*", kind: "*" }
