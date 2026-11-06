@@ -1,6 +1,6 @@
 # Mesure d'audience — Matomo (ns `matomo`)
 
-Matomo auto-hébergé, **mutualisé** : une seule instance, **un site par application**
+Matomo auto-hébergé, **mutualisé**, sur `stats.system.crealcs.com` : une seule instance, **un site par application**
 (ludi-tabulares, xpms…). Géré en GitOps par homelab-platform (Application Argo
 `analytics`, projet `system`). Base MariaDB dédiée : Matomo ne fonctionne pas sur
 PostgreSQL et le socle n'a pas de MySQL.
@@ -18,7 +18,7 @@ monitoring (VictoriaMetrics) ──scrape──▶ mysqld-exporter ; VMRule ─�
 |---|---|
 | `10-mariadb.yaml` | StatefulSet MariaDB (5 Gi), utilisateur `exporter`, mysqld-exporter. |
 | `20-matomo.yaml` | Deployment Matomo (volume 5 Gi : code, config, plugins) + conteneur d'archivage horaire. |
-| `30-ingress.yaml` | Ingress 2 hôtes : `stats.crealcs.com` (canonique) + `matomo.system.crealcs.com` (alias). |
+| `30-ingress.yaml` | Ingress de l'hôte unique `stats.system.crealcs.com` (suivi et administration). |
 | `40-backup.yaml` | Sauvegarde quotidienne (`mariadb-dump` → MinIO, rclone), rétention 30 jours. |
 | `50-network.yaml` | NetworkPolicies : MariaDB réservée au ns ; Matomo joignable depuis l'edge seulement. |
 | `60-monitoring.yaml` | `VMServiceScrape` (MariaDB) + `VMRule` (Matomo indisponible, base injoignable, sauvegarde en échec). |
@@ -26,8 +26,8 @@ monitoring (VictoriaMetrics) ──scrape──▶ mysqld-exporter ; VMRule ─�
 
 ## Prérequis (hors Git)
 
-1. **DNS** : `stats.crealcs.com` et `matomo.system.crealcs.com` vers l'IP publique
-   (ou le wildcard `*.system.crealcs.com`). La réécriture CoreDNS `crealcs.override`
+1. **DNS** : `stats.system.crealcs.com` vers l'IP publique (ou le wildcard
+   `*.system.crealcs.com`). La réécriture CoreDNS `crealcs.override`
    couvre déjà `*.crealcs.com` (self-check ACME et archivage interne).
 2. **Secrets** dans le ns `matomo` (à sceller selon ta convention). Mots de passe
    en base64 : jamais d'apostrophe (le script d'init les insère en SQL).
@@ -67,7 +67,7 @@ kubectl -n matomo exec -it mariadb-0 -c mariadb -- sh -c \
 
 ## Installation de Matomo (assistant web, une fois)
 
-Ouvrir `https://matomo.system.crealcs.com` :
+Ouvrir `https://stats.system.crealcs.com` :
 
 1. **Base de données** : préremplie (hôte `mariadb.matomo.svc.cluster.local`, base et
    utilisateur `matomo`). Garder le préfixe `matomo_`.
@@ -81,8 +81,7 @@ Puis, réglages derrière l'edge (en `www-data`, dans le conteneur `matomo`) :
 ```bash
 kubectl -n matomo exec deploy/matomo -c matomo -- su -s /bin/sh www-data -c '
   cd /var/www/html &&
-  ./console config:set "General.trusted_hosts[]=\"stats.crealcs.com\"" &&
-  ./console config:set "General.trusted_hosts[]=\"matomo.system.crealcs.com\"" &&
+  ./console config:set "General.trusted_hosts[]=\"stats.system.crealcs.com\"" &&
   ./console config:set "General.assume_secure_protocol=1" &&
   ./console config:set "General.force_ssl=1" &&
   ./console config:set "General.proxy_client_headers[]=\"HTTP_X_FORWARDED_FOR\"" &&
@@ -111,7 +110,7 @@ connectés, lien d'opposition — c'est l'application qui le porte.
 ## Connexion par le SSO (Keycloak)
 
 1. Dans Keycloak (realm de la plateforme) : client OIDC `matomo`, confidentiel,
-   URL de retour `https://matomo.system.crealcs.com/index.php?module=LoginOIDC&action=callback&provider=oidc`.
+   URL de retour `https://stats.system.crealcs.com/index.php?module=LoginOIDC&action=callback&provider=oidc`.
 2. Dans Matomo › Administration › Marketplace : installer le plugin **LoginOIDC**
    (gratuit), puis Administration › Système › Paramètres généraux › LoginOIDC :
    - Authorize URL : `https://sso.crealcs.com/realms/<realm>/protocol/openid-connect/auth`
@@ -126,7 +125,7 @@ connectés, lien d'opposition — c'est l'application qui le porte.
 1. Matomo › Administration › Sites › Ajouter : nom, URL publique, fuseau
    Europe/Paris ; appliquer les réglages d'exemption ci-dessus. Relever
    l'**identifiant du site**.
-2. Chez l'application, renseigner l'adresse `https://stats.crealcs.com` et
+2. Chez l'application, renseigner l'adresse `https://stats.system.crealcs.com` et
    l'identifiant (ludi-tabulares : Gestion du site › Boutique & audience).
 3. Vérifier : Matomo › Visiteurs › Journal des visites (en temps réel) ; les rapports
    agrégés suivent au prochain archivage (dans l'heure).
@@ -134,7 +133,7 @@ connectés, lien d'opposition — c'est l'application qui le porte.
 ## Vérifier
 
 ```bash
-curl -sI https://stats.crealcs.com/matomo.js | head -1                 # 200
+curl -sI https://stats.system.crealcs.com/matomo.js | head -1                 # 200
 kubectl -n matomo logs deploy/matomo -c archiver --tail=5               # « archivage terminé »
 kubectl -n matomo get cronjob,job                                       # mariadb-backup
 kubectl -n matomo create job --from=cronjob/mariadb-backup backup-essai # sauvegarde à la demande
@@ -158,7 +157,7 @@ kubectl -n argocd patch application analytics --type merge \
 
 ## Points durs
 
-- **`stats.crealcs.com` est inscrit chez chaque application** (et dans les pages déjà
+- **`stats.system.crealcs.com` est inscrit chez chaque application** (et dans les pages déjà
   en cache des navigateurs) : ne pas le renommer.
 - **WAF** : les appels `matomo.php` portent beaucoup de paramètres encodés ; ils sont
   listés dans les faux positifs attendus de [`edge/WAF.md`](../../edge/WAF.md), à

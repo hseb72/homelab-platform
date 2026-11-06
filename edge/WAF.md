@@ -75,7 +75,7 @@ blocage — sinon le passage à `SecRuleEngine On` cassera cette fonction.
 | Téléversement d'images et de documents | limites de taille | `SecRequestBodyLimit` |
 | Descriptions et modèles d'email riches en HTML | 941xxx (XSS) | contenu légitime |
 | Jetons JWT longs en en-tête | limites d'en-tête | taille d'`Authorization` |
-| Mesure d'audience `stats.crealcs.com/matomo.php` (nombreux paramètres, URL et titres de page encodés) | 920xxx, 942xxx | requêtes de suivi Matomo légitimes |
+| Mesure d'audience `stats.system.crealcs.com/matomo.php` (nombreux paramètres, URL et titres de page encodés) | 920xxx, 942xxx | requêtes de suivi Matomo légitimes |
 
 ## Chemins à ne jamais bloquer
 
@@ -85,7 +85,7 @@ Un blocage ici casse des fonctions entières :
   multi-tenant en dépend ; un blocage fait tomber tous les sites tenants ;
 - `/api/v1/platform-marketing/*` — pages publiques ;
 - `/api/v1/storage/*` — images publiques ;
-- `stats.crealcs.com/matomo.php` et `/matomo.js` — un blocage coupe la mesure
+- `stats.system.crealcs.com/matomo.php` et `/matomo.js` — un blocage coupe la mesure
   d'audience de toutes les applications (sans casser leurs pages).
 
 ## ⚠ Le fragment ne tolère ni apostrophe ni commentaire
