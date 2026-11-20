@@ -11,6 +11,9 @@ metadata:
   namespace: sso
 spec:
   instances: 1
+  # Image épinglée (cf. platform/instance.yaml) : 17.12, correctif de sécurité
+  # du 12/11/2026. « system » garde barman-cloud, « bookworm » la même glibc.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.12-system-bookworm
 
   bootstrap:
     initdb:

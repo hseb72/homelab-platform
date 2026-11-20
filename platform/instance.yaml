@@ -23,6 +23,12 @@ postgres:
   clientNamespaceLabel: platform-patterns.io/postgres-client   # défaut, explicite
   operatorNamespace: cnpg-system
   clusterName: postgres           # → service `postgres-rw.postgres.svc`
+  # Image PostgreSQL épinglée (chart platform ≥ 1.2.0). Sans elle, la version
+  # dépend de l'opérateur et ne reçoit jamais les correctifs de sécurité.
+  # 17.12 : correctif du 12/11/2026 (CVE-2026-6460 et 51 autres). Garder
+  # « system » (barman-cloud, requis par la sauvegarde barmanObjectStore) et
+  # « bookworm » (même glibc que la 17.2 d'origine → pas de réindexation).
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.12-system-bookworm
   instances: 1                    # nœud unique : 1 instance (pas de HILA utile ici)
   storageSize: 20Gi
   parameters:
