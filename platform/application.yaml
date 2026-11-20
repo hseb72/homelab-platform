@@ -23,7 +23,7 @@ spec:
     # Le chart, depuis l'OCI de platform-patterns (immuable, opt-in).
     - repoURL: ghcr.io/hseb72/platform-patterns
       chart: platform
-      targetRevision: 1.1.0
+      targetRevision: 1.2.0
       helm:
         valueFiles:
           - $values/platform/instance.yaml
