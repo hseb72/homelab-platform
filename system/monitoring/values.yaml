@@ -127,6 +127,12 @@ grafana:
   # La datasource VictoriaMetrics (compatible Prometheus) est branchée par le
   # chart vm-k8s-stack automatiquement. Dashboards k8s par défaut inclus.
   defaultDashboardsEnabled: true
+  # Tableaux de bord des applications : ConfigMaps étiquetées `grafana_dashboard: "1"`
+  # posées CHEZ ELLES. Par défaut le sidecar ne lit que le namespace de Grafana ;
+  # ALL suit le principe « chaque appli déclare son besoin chez elle ».
+  sidecar:
+    dashboards:
+      searchNamespace: ALL
   ingress:
     enabled: true
     ingressClassName: nginx

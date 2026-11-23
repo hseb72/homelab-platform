@@ -227,3 +227,41 @@ spec:
                 name: kong-proxy
                 port:
                   number: 80
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ludi-tabulares (La Caverne du Jeu) — https://github.com/hseb72/ludi-tabulares
+#
+# Même hôte que le front (servi en direct par l'edge, cf. son webIngress) :
+# seul le chemin `/api` va à Kong. Routes Kong dans `api-ludi-tabulares`
+# (rendues par charts/app). Taille de corps : images du back-office (10 Mo) et
+# paquets de thème zip (30 Mo) → 35m. Entrée posée à la main lors de la mise en
+# service, versionnée ici (Q-T13 de l'application).
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ludi-tabulares-api
+  namespace: kong
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-http01
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "35m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ludi-tabulares.crealcs.com
+      secretName: ludi-tabulares-api-tls
+  rules:
+    - host: ludi-tabulares.crealcs.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 80
