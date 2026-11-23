@@ -1,5 +1,5 @@
 # App-of-apps du socle partagé : instancie le chart `platform` de
-# platform-patterns (épinglé 1.1.0) avec nos valeurs (platform/instance.yaml).
+# platform-patterns (épinglé 1.3.0) avec nos valeurs (platform/instance.yaml).
 #
 # Multi-source : le chart vient de l'OCI publié par platform-patterns, les
 # valeurs viennent de CE dépôt (ref `values`). Le chart génère une Application
@@ -23,7 +23,7 @@ spec:
     # Le chart, depuis l'OCI de platform-patterns (immuable, opt-in).
     - repoURL: ghcr.io/hseb72/platform-patterns
       chart: platform
-      targetRevision: 1.2.0
+      targetRevision: 1.3.0
       helm:
         valueFiles:
           - $values/platform/instance.yaml

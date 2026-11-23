@@ -91,6 +91,13 @@ redis:
   image: redis:7.4.3             # aligné sur la prod
   storageSize: 1Gi
   port: 6379
+  # Comptes ACL des applications (un par appli, limité à son préfixe) conservés
+  # dans /data/users.acl et rechargés au démarrage (chart platform ≥ 1.3.0).
+  # Sans cela, ils vivaient en mémoire et disparaissaient à chaque redémarrage.
+  # AVANT la première synchro avec cette option, copier les comptes en mémoire :
+  #   kubectl -n redis exec redis-0 -- sh -c 'redis-cli ACL LIST > /data/users.acl'
+  # Ensuite, après tout ACL SETUSER : redis-cli ACL SAVE.
+  aclFile: true
 
 # ── App-of-apps : destination Argo des Applications générées ─────────────────
 argocd:
